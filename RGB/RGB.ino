@@ -17,6 +17,8 @@ const uint8_t PixelPin = 12;  // make sure to set this to the correct pin, ignor
 RgbColor red(colorSaturation, 0, 0);
 RgbColor green(0, colorSaturation, 0);
 RgbColor blue(0, 0, colorSaturation);
+RgbColor off(0,0,0);
+RgbColor white(colorSaturation, colorSaturation, colorSaturation);
 
 // Make sure to provide the correct color order feature
 // for your NeoPixels
