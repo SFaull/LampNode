@@ -9,9 +9,8 @@
 //
 
 #include <NeoPixelBrightnessBus.h> // instead of NeoPixelBus.h
-#define WIDTH   7
-#define HEIGHT  9
-
+#define WIDTH   10
+#define HEIGHT  6
 
 const uint16_t PixelCount = 60; // this example assumes 3 pixels, making it smaller will cause a failure
 const uint8_t PixelPin = 12;  // make sure to set this to the correct pin, ignored for Esp8266
@@ -23,19 +22,22 @@ RgbColor blue(0, 0, colorSaturation);
 RgbColor off(0,0,0);
 RgbColor white(colorSaturation, colorSaturation, colorSaturation);
 
+unsigned long previousMillis = 0;       // will store last time LED was updated
+const long interval = 50;               // interval at which to update LEDs
+
+bool MODE = false;
+
 int index[HEIGHT][WIDTH] =  
 {
-  {0,  1,  2,  3,  4,  5,  6  },
-  {7,  8,  9,  10, 11, 12, 13 },
-  {14, 15, 16, 17, 18, 19, 20 },
-  {21, 22, 23, 24, 25, 26, 27 },
-  {28, 29, 30, 31, 32, 33, 34 },
-  {35, 36, 37, 38, 39, 40, 41 },
-  {42, 43, 44, 45, 46, 47, 48 },
-  {49, 50, 51, 52, 53, 54, 55 },
-  {56, 57, 58, 59, 60, 61, 62 } // last two not used
+  { 0,  1,  2,  3,  4,  5,  6,  7,  8,  9},
+  {10, 11, 12, 13, 14, 15, 16, 17, 18, 19},
+  {20, 21, 22, 23, 24, 25, 26, 27, 28, 29},
+  {30, 31, 32, 33, 34, 35, 36, 37, 38, 39},
+  {40, 41, 42, 43, 44, 45, 46, 47, 48, 49},
+  {50, 51, 52, 53, 54, 55, 56, 57, 58, 59}
 };
 
+int x = 0;
 int y = 0;
 
 // Make sure to provide the correct color order feature
@@ -91,40 +93,58 @@ void loop()
     brightness += direction;
     strip.SetBrightness(brightness);
 */
-    // show the results
-    setPosition(); 
-    //strip.Show();
-    delay(50);
-    blank();
-    //delay(5);
-    
-    if (y < HEIGHT)
-     y++;
-    else
-     y = 0;
+
+  unsigned long currentMillis = millis();
+  
+  // every 50 ms refresh the led state
+  if (currentMillis - previousMillis >= interval) 
+  {
+    MODE ? setPosition() : setPosition2();
+    previousMillis = currentMillis;
+  }
 }
 
 
 void setPosition(void)
 {
-  Serial.print(y);
+  //Serial.print(y);
   Serial.println(" ON");
     // set our three original colors
-    for (int x=0; x<WIDTH; x++)
+    for (int y=0; y<HEIGHT; y++)
     {
-      strip.SetPixelColor(index[y][x], green);
+      strip.SetPixelColor(index[y][x], blue);
+      strip.SetPixelColor(index[y][x-1], off);
     }
     strip.Show();
+
+    if (x < WIDTH)
+     x++;
+    else
+     x = 0;
 }
 
-void blank(void)
+void setPosition2(void)
 {
+  Serial.print(y);
+  Serial.println(" ON");
   Serial.print(y-1);
   Serial.println(" OFF");
     // set our three original colors
     for (int x=0; x<WIDTH; x++)
     {
-      strip.SetPixelColor(index[y-1][x], off);
+      strip.SetPixelColor(index[y][x], blue);
+      strip.SetPixelColor(index[y-direction][x], off);
     }
     strip.Show();
+     
+    if (y >= HEIGHT-1)
+    {
+      direction = -1;
+    }
+    else if (y <= 0)
+    {
+      direction = 1;
+    }
+
+    y += direction;
 }
