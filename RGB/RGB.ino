@@ -22,10 +22,12 @@ RgbColor blue(0, 0, colorSaturation);
 RgbColor off(0,0,0);
 RgbColor white(colorSaturation, colorSaturation, colorSaturation);
 
+unsigned long currentMillis = 0;
 unsigned long previousMillis = 0;       // will store last time LED was updated
+unsigned long modeMillis = 0;       // will store last time LED was updated
 const long interval = 50;               // interval at which to update LEDs
 
-bool MODE = false;
+enum {SWEEP1, SWEEP2, SWEEP3 } MODE;
 
 int index[HEIGHT][WIDTH] =  
 {
@@ -68,6 +70,8 @@ void setup()
     
     Serial.println();
     Serial.println("Running...");
+
+    MODE = SWEEP1;
 }
 
 
@@ -94,21 +98,51 @@ void loop()
     strip.SetBrightness(brightness);
 */
 
-  unsigned long currentMillis = millis();
-  
-  // every 50 ms refresh the led state
-  if (currentMillis - previousMillis >= interval) 
+  currentMillis = millis();
+
+  switch (MODE)
   {
-    MODE ? setPosition() : setPosition2();
-    previousMillis = currentMillis;
+    case SWEEP1:
+      setPosition();
+      break;
+      
+    case SWEEP2:
+      setPosition2();
+      break;
+      
+    case SWEEP3:
+      setPosition3();
+      break;
+      
+    default:
+      //do nothing
+      break;
   }
+
+
+  if (currentMillis - modeMillis >= 10000)
+  {
+    if (MODE == SWEEP3)
+      MODE = 0;
+    else
+      MODE = MODE+1;
+
+    allOff();
+    modeMillis = currentMillis;
+  }
+
+  
+
 }
 
 
 void setPosition(void)
 {
-  //Serial.print(y);
-  Serial.println(" ON");
+    // every 50 ms refresh the led state
+  if (currentMillis - previousMillis >= interval) 
+  {
+    //Serial.print(y);
+    Serial.println(" ON");
     // set our three original colors
     for (int y=0; y<HEIGHT; y++)
     {
@@ -121,14 +155,20 @@ void setPosition(void)
      x++;
     else
      x = 0;
+     
+    previousMillis = currentMillis;
+  }
 }
 
 void setPosition2(void)
 {
-  Serial.print(y);
-  Serial.println(" ON");
-  Serial.print(y-1);
-  Serial.println(" OFF");
+    // every 50 ms refresh the led state
+  if (currentMillis - previousMillis >= interval) 
+  {
+    Serial.print(y);
+    Serial.println(" ON");
+    Serial.print(y-1);
+    Serial.println(" OFF");
     // set our three original colors
     for (int x=0; x<WIDTH; x++)
     {
@@ -147,4 +187,43 @@ void setPosition2(void)
     }
 
     y += direction;
+
+    previousMillis = currentMillis;
+  }
 }
+
+void setPosition3(void)
+{
+  static int z = 0;
+  static bool state = true;
+    // every 50 ms refresh the led state
+  if (currentMillis - previousMillis >= interval) 
+  {
+    if (state)
+      strip.SetPixelColor(z, blue);
+    else
+      strip.SetPixelColor(z, off);
+    
+    strip.Show();
+
+    if (z>PixelCount)
+    {
+      state = !state;
+      z=0;
+    }
+     else
+      z++;
+    
+    previousMillis = currentMillis;
+  }
+}
+
+void allOff(void)
+{
+  for (int i=0; i<PixelCount; i++)
+  {
+    strip.SetPixelColor(i, off);
+    strip.Show();
+  }
+}
+
