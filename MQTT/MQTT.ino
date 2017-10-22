@@ -25,17 +25,22 @@
 
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
-#include <config.h>
+#include <config.h> // this stores the private variables such as wifi ssid and password etc.
 
-#define BUTTON D3
+#define BUTTON D3               //button on pin D3
+#define BUTTON_CHECK_TIMEOUT 50 //check for button pressed every 50ms
 
 WiFiClient espClient;
 PubSubClient client(espClient);
-long lastCheck = 0;
-char msg[50];
-int value = 0;
 
+long buttonTime = 0; // stores the time that the button was depressed for
+long lastPushed = 0; // stores the time when button was last depressed
+long lastCheck = 0;  // stores the time when last checked for a button press
+char msg[50];        // message buffer
+
+// Flags
 bool button_pressed = false; // true if a button press has been registered
+bool button_released = false; // true if a button release has been registered
 
 void setup_wifi() 
 {
@@ -74,16 +79,9 @@ void callback(char* topic, byte* payload, unsigned int length)
 
   // Switch on the LED if an 1 was received as first character
   if ((char)payload[0] == '1') 
-  {
-    digitalWrite(BUILTIN_LED, LOW);   // Turn the LED on (Note that LOW is the voltage level
-    // but actually the LED is on; this is because
-    // it is acive low on the ESP-01)
-  } 
+    digitalWrite(BUILTIN_LED, LOW);   // Turn the LED on (active low)
   else 
-  {
     digitalWrite(BUILTIN_LED, HIGH);  // Turn the LED off by making the voltage HIGH
-  }
-
 }
 
 void reconnect() {
@@ -97,11 +95,11 @@ void reconnect() {
     clientId += String(random(0xffff), HEX);
     */
     // Attempt to connect
-    if (client.connect("ESP8266Client", MQTTuser, MQTTpassword)) 
+    if (client.connect("LampNode01", MQTTuser, MQTTpassword)) 
     {
       Serial.println("connected");
       // Once connected, publish an announcement...
-      client.publish("/test/outTopic", "ESP8266Client connected");
+      client.publish("/test/outTopic", "ESP8266Client connected");  // potentially not necessary
       // ... and resubscribe
       client.subscribe("/test/inTopic");
     } 
@@ -120,10 +118,13 @@ void readInputs(void)
 {
   static bool button_state, last_button_state = false; // Remembers the current and previous button states
   
-  button_state = !digitalRead(BUTTON); // active low
-
-  if (!button_state && last_button_state) // on a falling edge we register a button press
+  button_state = !digitalRead(BUTTON); // read button state (active low)
+  
+  if (button_state && !last_button_state) // on a rising edge we register a button press
     button_pressed = true;
+    
+  if (!button_state && last_button_state) // on a falling edge we register a button press
+    button_released = true;
 
   last_button_state = button_state;
 }
@@ -146,19 +147,33 @@ void loop()
   }
   client.loop();
 
-  long now = millis();
-  if (now - lastCheck > 50) // check for button press every 50ms
+  long now = millis();  // get elapsed time
+  
+  if (now - lastCheck > BUTTON_CHECK_TIMEOUT) // check for button press periodically
   {
     lastCheck = now;
     readInputs();
+    
     if (button_pressed)
     {
-      ++value;
-      snprintf (msg, 75, "hello world #%ld", value);
+      //start conting
+      lastPushed = now; // start the timer 
+      Serial.print("Button pushed... ");
+      button_pressed = false;
+    }
+    
+    if (button_released)
+    {
+      Serial.println("Button released.");
+
+      //get the time that button was held in
+      buttonTime = now - lastPushed;
+
+      snprintf (msg, 75, "hello world #%ld", buttonTime);
       Serial.print("Publish message: ");
       Serial.println(msg);
       client.publish("/test/outTopic", msg);
-      button_pressed = false;
+      button_released = false;
     }
   }
 }
