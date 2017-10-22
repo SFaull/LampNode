@@ -49,8 +49,8 @@ long buttonTime = 0; // stores the time that the button was depressed for
 long lastPushed = 0; // stores the time when button was last depressed
 long lastCheck = 0;  // stores the time when last checked for a button press
 char msg[50];        // message buffer
-uint8_t rgbval[3] = {0,0,0};
-char rgb[9] = {};
+uint8_t rgbval[4] = {0,0,0,0};
+char rgb[12] = {};
 
 // Flags
 bool button_pressed = false; // true if a button press has been registered
@@ -71,12 +71,6 @@ NeoPixelBrightnessBus<NeoRgbFeature, Neo800KbpsMethod> strip(PixelCount, PixelPi
 
 void setup_wifi() 
 {
-  delay(10);
-
-  // this resets all the neopixels to an off state
-  strip.Begin();
-  strip.Show();
-
   delay(10);
   
   // We start by connecting to a WiFi network
@@ -122,9 +116,17 @@ void callback(char* topic, byte* payload, unsigned int length)
     rgbval[0] = rgb[0]*100 + rgb[1]*10 + rgb[2];
     rgbval[1] = rgb[3]*100 + rgb[4]*10 + rgb[5];
     rgbval[2] = rgb[6]*100 + rgb[7]*10 + rgb[8];
+    rgbval[3] = rgb[9]*100 + rgb[10]*10 + rgb[11];
 
-    RgbColor colour(rgbval[0],rgbval[1],rgbval[2]);
-    setColour();
+    Serial.print("Colour: ");
+    for (int i=0; i<3; i++)
+    {
+      Serial.print(rgbval[i]);
+      Serial.print(", ");
+    }
+    Serial.println("");
+    
+    setColour(rgbval[0],rgbval[1],rgbval[2],rgbval[3]);
   }
 }
 
@@ -143,7 +145,7 @@ void reconnect() {
     {
       Serial.println("connected");
       // Once connected, publish an announcement...
-      client.publish("/test/outTopic", "ESP8266Client connected");  // potentially not necessary
+      client.publish("/test/outTopic", "LampNode01 connected");  // potentially not necessary
       // ... and resubscribe
       client.subscribe("/test/inTopic");
     } 
@@ -173,13 +175,20 @@ void readInputs(void)
   last_button_state = button_state;
 }
 
-void setColour(void)
+void setColour(uint8_t r, uint8_t g, uint8_t b, uint8_t brightness)
 {
+  if (r < 256 && g < 256 && b < 256 && brightness <256)
+  {
+    RgbColor colour(r,g,b);
     for (uint8_t i=0; i<PixelCount; i++)
     {
       strip.SetPixelColor(i, colour);
     }
+    strip.SetBrightness(brightness);
     strip.Show();
+  }
+  else
+    Serial.println("Invalid RGB value, colour not set");
 }
 
 void setup() 
@@ -190,6 +199,11 @@ void setup()
   setup_wifi();
   client.setServer(MQTTserver, MQTTport);
   client.setCallback(callback);
+  delay(10);
+  // this resets all the neopixels to an off state
+  strip.Begin();
+  strip.Show();
+  setColour(255,0,0,20);
 }
 
 void loop() 
@@ -199,9 +213,7 @@ void loop()
     reconnect();
   }
   client.loop();
-
-  strip.SetBrightness(BRIGHTNESS);
-
+  
   long now = millis();  // get elapsed time
   
   if (now - lastCheck > BUTTON_CHECK_TIMEOUT) // check for button press periodically
