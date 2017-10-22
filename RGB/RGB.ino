@@ -29,7 +29,7 @@ const long interval = 50;               // interval at which to update LEDs
 
 enum {SWEEP1, SWEEP2, SWEEP3 } MODE;
 
-int index[HEIGHT][WIDTH] =  
+uint8_t LEDindex[HEIGHT][WIDTH] =  
 {
   { 0,  1,  2,  3,  4,  5,  6,  7,  8,  9},
   {10, 11, 12, 13, 14, 15, 16, 17, 18, 19},
@@ -39,8 +39,8 @@ int index[HEIGHT][WIDTH] =
   {50, 51, 52, 53, 54, 55, 56, 57, 58, 59}
 };
 
-int x = 0;
-int y = 0;
+uint8_t x = 0;
+uint8_t y = 0;
 
 // Make sure to provide the correct color order feature
 // for your NeoPixels
@@ -123,9 +123,11 @@ void loop()
   if (currentMillis - modeMillis >= 10000)
   {
     if (MODE == SWEEP3)
-      MODE = 0;
-    else
-      MODE = MODE+1;
+      MODE = SWEEP1;
+    else if (MODE == SWEEP1)
+      MODE = SWEEP2;
+    else if (MODE == SWEEP2)
+      MODE = SWEEP3;
 
     allOff();
     modeMillis = currentMillis;
@@ -144,10 +146,10 @@ void setPosition(void)
     //Serial.print(y);
     Serial.println(" ON");
     // set our three original colors
-    for (int y=0; y<HEIGHT; y++)
+    for (uint8_t y=0; y<HEIGHT; y++)
     {
-      strip.SetPixelColor(index[y][x], blue);
-      strip.SetPixelColor(index[y][x-1], off);
+      strip.SetPixelColor(LEDindex[y][x], blue);
+      strip.SetPixelColor(LEDindex[y][x-1], off);
     }
     strip.Show();
 
@@ -170,10 +172,10 @@ void setPosition2(void)
     Serial.print(y-1);
     Serial.println(" OFF");
     // set our three original colors
-    for (int x=0; x<WIDTH; x++)
+    for (uint8_t x=0; x<WIDTH; x++)
     {
-      strip.SetPixelColor(index[y][x], blue);
-      strip.SetPixelColor(index[y-direction][x], off);
+      strip.SetPixelColor(LEDindex[y][x], blue);
+      strip.SetPixelColor(LEDindex[y-direction][x], off);
     }
     strip.Show();
      
@@ -194,7 +196,7 @@ void setPosition2(void)
 
 void setPosition3(void)
 {
-  static int z = 0;
+  static uint8_t z = 0;
   static bool state = true;
     // every 50 ms refresh the led state
   if (currentMillis - previousMillis >= interval) 
@@ -220,7 +222,7 @@ void setPosition3(void)
 
 void allOff(void)
 {
-  for (int i=0; i<PixelCount; i++)
+  for (uint8_t i=0; i<PixelCount; i++)
   {
     strip.SetPixelColor(i, off);
     strip.Show();
