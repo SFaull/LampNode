@@ -11,6 +11,7 @@
 #include <NeoPixelBrightnessBus.h> // instead of NeoPixelBus.h
 #define WIDTH   10
 #define HEIGHT  6
+#define BRIGHTNESS 100
 
 const uint16_t PixelCount = 60; // this example assumes 3 pixels, making it smaller will cause a failure
 const uint8_t PixelPin = 12;  // make sure to set this to the correct pin, ignored for Esp8266
@@ -97,6 +98,8 @@ void loop()
     brightness += direction;
     strip.SetBrightness(brightness);
 */
+
+  strip.SetBrightness(BRIGHTNESS);
 
   currentMillis = millis();
 
