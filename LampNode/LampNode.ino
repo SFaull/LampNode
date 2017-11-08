@@ -36,8 +36,8 @@
 #include <PubSubClient.h>
 #include <config.h> // this stores the private variables such as wifi ssid and password etc.
 #include <NeoPixelBrightnessBus.h> // instead of NeoPixelBus.h
-
-#define BRIGHTNESS 100
+#include <stdio.h>
+#include <string.h>
 
 #define BUTTON D3               //button on pin D3
 #define BUTTON_CHECK_TIMEOUT 50 //check for button pressed every 50ms
@@ -96,6 +96,7 @@ void setup_wifi()
 
 void callback(char* topic, byte* payload, unsigned int length) 
 {
+  /* ------ Print incoming message to serial ------- */
   Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("] ");
@@ -105,29 +106,19 @@ void callback(char* topic, byte* payload, unsigned int length)
   }
   Serial.println();
 
-  // Switch on the LED if an 1 was received as first character
-  if ((char)payload[0] == 'c') 
-  {
-    for (int i=1; i<length; i++)
-    {
-      rgb[i-1] = (int)payload[i] - 48;
-    }
-    
-    rgbval[0] = rgb[0]*100 + rgb[1]*10 + rgb[2];
-    rgbval[1] = rgb[3]*100 + rgb[4]*10 + rgb[5];
-    rgbval[2] = rgb[6]*100 + rgb[7]*10 + rgb[8];
-    rgbval[3] = rgb[9]*100 + rgb[10]*10 + rgb[11];
+  /* ----- Split message by separator character ---- */
+  char * command;
+  int rgb[3] = {'0','0','0'};
+  int index = 0;
 
-    Serial.print("Colour: ");
-    for (int i=0; i<3; i++)
-    {
-      Serial.print(rgbval[i]);
-      Serial.print(", ");
-    }
-    Serial.println("");
-    
-    setColour(rgbval[0],rgbval[1],rgbval[2],rgbval[3]);
+  command = strtok (payload," (,)");  // this is the first part of the string (rgb) - ignore this
+  while (command != NULL)
+  {
+    command = strtok (NULL, " (,)");
+    rgb[index++] = atoi(command);
   }
+  
+  setColour(rgb[0],rgb[1],rgb[2]);
 }
 
 void reconnect() {
@@ -175,16 +166,15 @@ void readInputs(void)
   last_button_state = button_state;
 }
 
-void setColour(uint8_t r, uint8_t g, uint8_t b, uint8_t brightness)
+void setColour(uint8_t r, uint8_t g, uint8_t b)
 {
-  if (r < 256 && g < 256 && b < 256 && brightness <256)
+  if (r < 256 && g < 256 && b < 256)
   {
     RgbColor colour(r,g,b);
     for (uint8_t i=0; i<PixelCount; i++)
     {
       strip.SetPixelColor(i, colour);
     }
-    strip.SetBrightness(brightness);
     strip.Show();
   }
   else
@@ -215,6 +205,12 @@ void loop()
   client.loop();
   
   long now = millis();  // get elapsed time
+
+  // get pot v al and set brightness accordingly
+  int val = analogRead(A0);
+  val = map(val, 0, 1023, 0, 255);
+  int BRIGHTNESS = val;
+
   
   if (now - lastCheck > BUTTON_CHECK_TIMEOUT) // check for button press periodically
   {
