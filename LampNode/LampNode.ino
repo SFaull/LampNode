@@ -49,8 +49,6 @@ long buttonTime = 0; // stores the time that the button was depressed for
 long lastPushed = 0; // stores the time when button was last depressed
 long lastCheck = 0;  // stores the time when last checked for a button press
 char msg[50];        // message buffer
-uint8_t rgbval[4] = {0,0,0,0};
-char rgb[12] = {};
 
 // Flags
 bool button_pressed = false; // true if a button press has been registered
@@ -96,6 +94,7 @@ void setup_wifi()
 
 void callback(char* topic, byte* payload, unsigned int length) 
 {
+  char input[length];
   /* ------ Print incoming message to serial ------- */
   Serial.print("Message arrived [");
   Serial.print(topic);
@@ -103,22 +102,28 @@ void callback(char* topic, byte* payload, unsigned int length)
   for (int i = 0; i < length; i++) 
   {
     Serial.print((char)payload[i]);
+    input[i] = (char)payload[i];  // store payload as char array
   }
   Serial.println();
 
   /* ----- Split message by separator character ---- */
+ 
   char * command;
   int rgb[3] = {'0','0','0'};
   int index = 0;
-
-  command = strtok (payload," (,)");  // this is the first part of the string (rgb) - ignore this
-  while (command != NULL)
+  Serial.print("rgb(");
+  command = strtok (input," (,)");  // this is the first part of the string (rgb) - ignore this
+  while (index<3)
   {
     command = strtok (NULL, " (,)");
-    rgb[index++] = atoi(command);
+    rgb[index] = atoi(command);
+    Serial.print(rgb[index]);
+    Serial.print(", ");
+    index++;
   }
-  
+  Serial.println(")");
   setColour(rgb[0],rgb[1],rgb[2]);
+ 
 }
 
 void reconnect() {
@@ -170,7 +175,7 @@ void setColour(uint8_t r, uint8_t g, uint8_t b)
 {
   if (r < 256 && g < 256 && b < 256)
   {
-    RgbColor colour(r,g,b);
+    RgbColor colour(g,r,b);
     for (uint8_t i=0; i<PixelCount; i++)
     {
       strip.SetPixelColor(i, colour);
@@ -193,7 +198,7 @@ void setup()
   // this resets all the neopixels to an off state
   strip.Begin();
   strip.Show();
-  setColour(255,0,0,20);
+  setColour(255,0,0);
 }
 
 void loop() 
@@ -205,12 +210,6 @@ void loop()
   client.loop();
   
   long now = millis();  // get elapsed time
-
-  // get pot v al and set brightness accordingly
-  int val = analogRead(A0);
-  val = map(val, 0, 1023, 0, 255);
-  int BRIGHTNESS = val;
-
   
   if (now - lastCheck > BUTTON_CHECK_TIMEOUT) // check for button press periodically
   {
