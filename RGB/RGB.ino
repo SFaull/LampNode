@@ -9,26 +9,24 @@
 //
 
 #include <NeoPixelBrightnessBus.h> // instead of NeoPixelBus.h
-#define WIDTH   10
-#define HEIGHT  6
-//#define BRIGHTNESS 100
+
+#define colorSaturation     255 // saturation of color constants
+#define WIDTH               10
+#define HEIGHT              6
+#define MODE_TIMEOUT        10000
+#define LED_REFRESH_TIMEOUT 50
+
+unsigned long runTime,
+              ledTimer, 
+              modeTimer = 0;
 
 const uint16_t PixelCount = 60; // this example assumes 3 pixels, making it smaller will cause a failure
-const uint8_t PixelPin = 12;  // make sure to set this to the correct pin, ignored for Esp8266
-
-#define colorSaturation 255 // saturation of color constants
-RgbColor red(colorSaturation, 0, 0);
-RgbColor green(0, colorSaturation, 0);
-RgbColor blue(0, 0, colorSaturation);
-RgbColor off(0,0,0);
-RgbColor white(colorSaturation, colorSaturation, colorSaturation);
-
-unsigned long currentMillis = 0;
-unsigned long previousMillis = 0;       // will store last time LED was updated
-unsigned long modeMillis = 0;       // will store last time LED was updated
-const long interval = 50;               // interval at which to update LEDs
+const uint8_t  PixelPin = 12;  // make sure to set this to the correct pin, ignored for Esp8266
 
 enum {SWEEP1, SWEEP2, SWEEP3 } MODE;
+
+uint8_t x, 
+        y = 0;
 
 uint8_t LEDindex[HEIGHT][WIDTH] =  
 {
@@ -40,17 +38,16 @@ uint8_t LEDindex[HEIGHT][WIDTH] =
   {50, 51, 52, 53, 54, 55, 56, 57, 58, 59}
 };
 
-uint8_t x = 0;
-uint8_t y = 0;
-
-// Make sure to provide the correct color order feature
-// for your NeoPixels
-NeoPixelBrightnessBus<NeoRgbFeature, Neo800KbpsMethod> strip(PixelCount, PixelPin);
-
-// you loose the original color the lower the dim value used
-// here due to quantization
 const uint8_t c_MinBrightness = 8; 
 const uint8_t c_MaxBrightness = 255;
+
+RgbColor red(colorSaturation, 0, 0);
+RgbColor green(0, colorSaturation, 0);
+RgbColor blue(0, 0, colorSaturation);
+RgbColor off(0,0,0);
+RgbColor white(colorSaturation, colorSaturation, colorSaturation);
+
+NeoPixelBrightnessBus<NeoRgbFeature, Neo800KbpsMethod> strip(PixelCount, PixelPin);
 
 int8_t direction; // current direction of dimming
 
@@ -72,6 +69,10 @@ void setup()
     Serial.println();
     Serial.println("Running...");
 
+    // start timers
+    setTimer(&ledTimer);
+    setTimer(&modeTimer);
+
     MODE = SWEEP1;
 }
 
@@ -80,23 +81,6 @@ void loop()
 {
   /*
     uint8_t brightness = strip.GetBrightness();
-    Serial.println(brightness);
-    
-    delay(10);
-
-    // swap diection of dim when limits are reached
-    //
-    if (direction < 0 && brightness <= c_MinBrightness)
-    {
-      direction = 1;
-    }
-    else if (direction > 0 && brightness >= c_MaxBrightness)
-    {
-      direction = -1;
-    }
-    // apply dimming
-    brightness += direction;
-    strip.SetBrightness(brightness);
 */
 
   int val = analogRead(A0);
@@ -104,31 +88,35 @@ void loop()
   int BRIGHTNESS = val;
 
   strip.SetBrightness(BRIGHTNESS);
-
-  currentMillis = millis();
-
-  switch (MODE)
+  
+  if(timerExpired(ledTimer, LED_REFRESH_TIMEOUT))
   {
-    case SWEEP1:
-      setPosition();
-      break;
-      
-    case SWEEP2:
-      setPosition2();
-      break;
-      
-    case SWEEP3:
-      setPosition3();
-      break;
-      
-    default:
-      //do nothing
-      break;
+    setTimer(&ledTimer);  // reset the timer
+    
+    switch (MODE)
+    {
+      case SWEEP1:
+        setPosition();
+        break;
+        
+      case SWEEP2:
+        setPosition2();
+        break;
+        
+      case SWEEP3:
+        setPosition3();
+        break;
+        
+      default:
+        //do nothing
+        break;
+    }
   }
-
-
-  if (currentMillis - modeMillis >= 10000)
+  
+  if(timerExpired(modeTimer, MODE_TIMEOUT)) // if mode timer expired, change mode
   {
+    setTimer(&modeTimer); //reset the timer
+    
     if (MODE == SWEEP3)
       MODE = SWEEP1;
     else if (MODE == SWEEP1)
@@ -137,94 +125,91 @@ void loop()
       MODE = SWEEP3;
 
     allOff();
-    modeMillis = currentMillis;
   }
-
-  
 
 }
 
+/* pass this function a pointer to an unsigned long to store the start time for the timer */
+void setTimer(unsigned long *startTime)
+{
+  runTime = millis();    // get time running in ms
+  *startTime = runTime;  // store the current time
+}
+
+/* call this function and pass it the variable which stores the timer start time and the desired expiry time 
+   returns true fi timer has expired */
+bool timerExpired(unsigned long startTime, unsigned long expiryTime)
+{
+  runTime = millis(); // get time running in ms
+  if ( (runTime - startTime) >= expiryTime )
+    return true;
+  else
+    return false;
+}
 
 void setPosition(void)
 {
-    // every 50 ms refresh the led state
-  if (currentMillis - previousMillis >= interval) 
+  //Serial.print(y);
+  Serial.println(" ON");
+  // set our three original colors
+  for (uint8_t y=0; y<HEIGHT; y++)
   {
-    //Serial.print(y);
-    Serial.println(" ON");
-    // set our three original colors
-    for (uint8_t y=0; y<HEIGHT; y++)
-    {
-      strip.SetPixelColor(LEDindex[y][x], blue);
-      strip.SetPixelColor(LEDindex[y][x-1], off);
-    }
-    strip.Show();
-
-    if (x < WIDTH)
-     x++;
-    else
-     x = 0;
-     
-    previousMillis = currentMillis;
+    strip.SetPixelColor(LEDindex[y][x], blue);
+    strip.SetPixelColor(LEDindex[y][x-1], off);
   }
+  strip.Show();
+
+  if (x < WIDTH)
+   x++;
+  else
+   x = 0;
 }
 
 void setPosition2(void)
 {
-    // every 50 ms refresh the led state
-  if (currentMillis - previousMillis >= interval) 
+  Serial.print(y);
+  Serial.println(" ON");
+  Serial.print(y-1);
+  Serial.println(" OFF");
+  // set our three original colors
+  for (uint8_t x=0; x<WIDTH; x++)
   {
-    Serial.print(y);
-    Serial.println(" ON");
-    Serial.print(y-1);
-    Serial.println(" OFF");
-    // set our three original colors
-    for (uint8_t x=0; x<WIDTH; x++)
-    {
-      strip.SetPixelColor(LEDindex[y][x], blue);
-      strip.SetPixelColor(LEDindex[y-direction][x], off);
-    }
-    strip.Show();
-     
-    if (y >= HEIGHT-1)
-    {
-      direction = -1;
-    }
-    else if (y <= 0)
-    {
-      direction = 1;
-    }
-
-    y += direction;
-
-    previousMillis = currentMillis;
+    strip.SetPixelColor(LEDindex[y][x], blue);
+    strip.SetPixelColor(LEDindex[y-direction][x], off);
   }
+  strip.Show();
+   
+  if (y >= HEIGHT-1)
+  {
+    direction = -1;
+  }
+  else if (y <= 0)
+  {
+    direction = 1;
+  }
+  
+  y += direction;
 }
 
 void setPosition3(void)
 {
   static uint8_t z = 0;
   static bool state = true;
-    // every 50 ms refresh the led state
-  if (currentMillis - previousMillis >= interval) 
-  {
-    if (state)
-      strip.SetPixelColor(z, blue);
-    else
-      strip.SetPixelColor(z, off);
-    
-    strip.Show();
 
-    if (z>PixelCount)
-    {
-      state = !state;
-      z=0;
-    }
-     else
-      z++;
-    
-    previousMillis = currentMillis;
+  if (state)
+    strip.SetPixelColor(z, blue);
+  else
+    strip.SetPixelColor(z, off);
+  
+  strip.Show();
+
+  if (z>PixelCount)
+  {
+    state = !state;
+    z=0;
   }
+   else
+    z++;
 }
 
 void allOff(void)
