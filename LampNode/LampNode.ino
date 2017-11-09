@@ -41,7 +41,7 @@
 
 #define BUTTON D3               //button on pin D3
 #define INPUT_READ_TIMEOUT 50   //check for button pressed every 50ms
-#define LED_UPDATE_TIMEOUT 20   // update led every 20ms
+#define LED_UPDATE_TIMEOUT 5   // update led every 20ms
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -102,6 +102,8 @@ void setup()
   //setColour(255,0,0);
 }
 
+int switcheroo = 0;
+
 void loop() 
 {
   if (!client.connected()) 
@@ -114,25 +116,29 @@ void loop()
   {
     setTimer(&ledTimer); // reset timer
     
-    for(int i=0; i<3; i++)
+    updateRequired = false; // assume no update required
+    
+    if (rgbValue[switcheroo] < rgbTarget[switcheroo])
     {
-      updateRequired = false; // assume no update required
+      updateRequired = true; // need to update
+      rgbValue[switcheroo]++;
       
-      if (rgbValue[i] < rgbTarget[i])
-      {
-        updateRequired = true; // need to update
-        rgbValue[i]++;
-        
-      }
-      else if (rgbValue[i] > rgbTarget[i])
-      {
-        updateRequired = true; // need to update
-        rgbValue[i]--;
-      }
+    }
+    else if (rgbValue[switcheroo] > rgbTarget[switcheroo])
+    {
+      updateRequired = true; // need to update
+      rgbValue[switcheroo]--;
     }
 
     if(updateRequired == true)
       setColour(rgbValue[0],rgbValue[1],rgbValue[2]); // only do this if we need to
+    else
+    {
+      if (switcheroo < 2)
+        switcheroo++;
+      else
+        switcheroo = 0;
+    }
   }
   
   if (timerExpired(readInputTimer, INPUT_READ_TIMEOUT)) // check for button press periodically
