@@ -40,12 +40,17 @@
 #include <string.h>
 
 #define BUTTON D3               //button on pin D3
-#define BUTTON_CHECK_TIMEOUT 50 //check for button pressed every 50ms
+#define INPUT_READ_TIMEOUT 50   //check for button pressed every 50ms
+#define LED_UPDATE_TIMEOUT 20   // update led every 20ms
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-long buttonTime = 0; // stores the time that the button was depressed for
+unsigned long runTime,
+              ledTimer, 
+              readInputTimer = 0;
+
+
 long lastPushed = 0; // stores the time when button was last depressed
 long lastCheck = 0;  // stores the time when last checked for a button press
 char msg[50];        // message buffer
@@ -54,9 +59,12 @@ char msg[50];        // message buffer
 bool button_pressed = false; // true if a button press has been registered
 bool button_released = false; // true if a button release has been registered
 
-
 const uint16_t PixelCount = 60; // this example assumes 3 pixels, making it smaller will cause a failure
 const uint8_t PixelPin = 12;  // make sure to set this to the correct pin, ignored for Esp8266
+
+unsigned int rgbTarget[3],               // rgb value that LEDs are currently set to
+             rgbValue[3] = '0','0','0';  // rgb value which we aim to set the LEDs to
+ 
 
 #define colorSaturation 255 // saturation of color constants
 RgbColor red(colorSaturation, 0, 0);
@@ -66,6 +74,88 @@ RgbColor off(0,0,0);
 RgbColor white(colorSaturation, colorSaturation, colorSaturation);
 
 NeoPixelBrightnessBus<NeoRgbFeature, Neo800KbpsMethod> strip(PixelCount, PixelPin);
+
+void setup() 
+{
+  /* Setup I/O */
+  pinMode(BUILTIN_LED, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
+  pinMode(BUTTON, INPUT_PULLUP);  // Enables the internal pull-up resistor
+  
+  /* Setup serial */
+  Serial.begin(115200);
+  
+  /* Setup WiFi and MQTT */ 
+  setup_wifi();
+  client.setServer(MQTTserver, MQTTport);
+  client.setCallback(callback);
+  
+  /* Start timers */
+  setTimer(readInputTimer);
+  setTimer(ledTimer);
+
+  /* Set LED state */
+  strip.Begin();
+  strip.Show();
+  //setColour(255,0,0);
+}
+
+void loop() 
+{
+  if (!client.connected()) 
+    reconnect();
+  client.loop();
+  
+  unsigned long now = millis();  // get elapsed time
+
+  if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
+  {
+    setTimer(ledTimer, LED_UPDATE_TIMEOUT); // reset timer
+    
+    for(int i=0; i<3; i++)
+    {
+      updateRequired[i] = true; // assumer we need to update
+      
+      if (rgbVal[i] < rgbTarget[i])
+        rgbVal[i]++;
+      else if (rgbVal[i] > rgbTarget[i])
+        rgbVal[i]--;
+      else
+      updateRequired[i] = false;  // if neither condition met we dont need to update this value
+    }
+
+    if(rgbVal[0] == true ||rgbVal[1] == true || rgbVal[2] == true)
+      setColour(rgbVal[0],rgbVal[1],rgbVal[2]); // only do this if we need to
+  }
+  
+  if (timerExpired(readInputTimer, INPUT_READ_TIMEOUT)) // check for button press periodically
+  {
+    setTimer(readInputTimer);  // reset timer
+    
+    readInputs();
+    
+    if (button_pressed)
+    {
+      //start conting
+      lastPushed = now; // start the timer 
+      Serial.print("Button pushed... ");
+      button_pressed = false;
+    }
+    
+    if (button_released)
+    {
+      Serial.println("Button released.");
+
+      //get the time that button was held in
+      buttonTime = now - lastPushed;
+
+      snprintf (msg, 75, "hello world #%ld", buttonTime);
+      Serial.print("Publish message: ");
+      Serial.println(msg);
+      client.publish("/test/outTopic", msg);
+      button_released = false;
+    }
+  }
+}
 
 void setup_wifi() 
 {
@@ -95,7 +185,7 @@ void setup_wifi()
 void callback(char* topic, byte* payload, unsigned int length) 
 {
   char input[length];
-  /* ------ Print incoming message to serial ------- */
+  /* --------------- Print incoming message to serial ------------------ */
   Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("] ");
@@ -106,8 +196,7 @@ void callback(char* topic, byte* payload, unsigned int length)
   }
   Serial.println();
 
-  /* ----- Split message by separator character ---- */
- 
+  /* ----- Split message by separator character and store rgb values ---- */
   char * command;
   int rgb[3] = {'0','0','0'};
   int index = 0;
@@ -117,12 +206,12 @@ void callback(char* topic, byte* payload, unsigned int length)
   {
     command = strtok (NULL, " (,)");
     rgb[index] = atoi(command);
-    Serial.print(rgb[index]);
+    Serial.print(rgbTarget[index]);
     Serial.print(", ");
     index++;
   }
   Serial.println(")");
-  setColour(rgb[0],rgb[1],rgb[2]);
+  //setColour(rgb[0],rgb[1],rgb[2]);
  
 }
 
@@ -186,56 +275,20 @@ void setColour(uint8_t r, uint8_t g, uint8_t b)
     Serial.println("Invalid RGB value, colour not set");
 }
 
-void setup() 
+/* pass this function a pointer to an unsigned long to store the start time for the timer */
+void setTimer(unsigned long *startTime)
 {
-  pinMode(BUILTIN_LED, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
-  pinMode(BUTTON, INPUT_PULLUP);  // Enables the internal pull-up resistor
-  Serial.begin(115200);
-  setup_wifi();
-  client.setServer(MQTTserver, MQTTport);
-  client.setCallback(callback);
-  delay(10);
-  // this resets all the neopixels to an off state
-  strip.Begin();
-  strip.Show();
-  setColour(255,0,0);
+  runTime = millis();    // get time running in ms
+  *startTime = runTime;  // store the current time
 }
 
-void loop() 
+/* call this function and pass it the variable which stores the timer start time and the desired expiry time 
+   returns true fi timer has expired */
+bool timerExpired(unsigned long startTime, unsigned long expiryTime)
 {
-  if (!client.connected()) 
-  {
-    reconnect();
-  }
-  client.loop();
-  
-  long now = millis();  // get elapsed time
-  
-  if (now - lastCheck > BUTTON_CHECK_TIMEOUT) // check for button press periodically
-  {
-    lastCheck = now;
-    readInputs();
-    
-    if (button_pressed)
-    {
-      //start conting
-      lastPushed = now; // start the timer 
-      Serial.print("Button pushed... ");
-      button_pressed = false;
-    }
-    
-    if (button_released)
-    {
-      Serial.println("Button released.");
-
-      //get the time that button was held in
-      buttonTime = now - lastPushed;
-
-      snprintf (msg, 75, "hello world #%ld", buttonTime);
-      Serial.print("Publish message: ");
-      Serial.println(msg);
-      client.publish("/test/outTopic", msg);
-      button_released = false;
-    }
-  }
+  runTime = millis(); // get time running in ms
+  if ( (runTime - startTime) >= expiryTime )
+    return true;
+  else
+    return false;
 }
