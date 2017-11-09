@@ -50,7 +50,7 @@ unsigned long runTime,
               ledTimer, 
               readInputTimer = 0;
 
-
+long buttonTime = 0;
 long lastPushed = 0; // stores the time when button was last depressed
 long lastCheck = 0;  // stores the time when last checked for a button press
 char msg[50];        // message buffer
@@ -58,12 +58,15 @@ char msg[50];        // message buffer
 // Flags
 bool button_pressed = false; // true if a button press has been registered
 bool button_released = false; // true if a button release has been registered
+bool updateRequired;
+
+bool colourFade = true;
 
 const uint16_t PixelCount = 60; // this example assumes 3 pixels, making it smaller will cause a failure
 const uint8_t PixelPin = 12;  // make sure to set this to the correct pin, ignored for Esp8266
 
-unsigned int rgbTarget[3],               // rgb value that LEDs are currently set to
-             rgbValue[3] = '0','0','0';  // rgb value which we aim to set the LEDs to
+unsigned int rgbTarget[3] = {50,50,50}; // rgb value that LEDs are currently set to
+unsigned int rgbValue[3] = {'0','0','0'};  // rgb value which we aim to set the LEDs to
  
 
 #define colorSaturation 255 // saturation of color constants
@@ -90,8 +93,8 @@ void setup()
   client.setCallback(callback);
   
   /* Start timers */
-  setTimer(readInputTimer);
-  setTimer(ledTimer);
+  setTimer(&readInputTimer);
+  setTimer(&ledTimer);
 
   /* Set LED state */
   strip.Begin();
@@ -107,29 +110,34 @@ void loop()
   
   unsigned long now = millis();  // get elapsed time
 
-  if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
+  if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT) && colourFade == true)
   {
-    setTimer(ledTimer, LED_UPDATE_TIMEOUT); // reset timer
+    setTimer(&ledTimer); // reset timer
     
     for(int i=0; i<3; i++)
     {
-      updateRequired[i] = true; // assumer we need to update
+      updateRequired = false; // assume no update required
       
-      if (rgbVal[i] < rgbTarget[i])
-        rgbVal[i]++;
-      else if (rgbVal[i] > rgbTarget[i])
-        rgbVal[i]--;
-      else
-      updateRequired[i] = false;  // if neither condition met we dont need to update this value
+      if (rgbValue[i] < rgbTarget[i])
+      {
+        updateRequired = true; // need to update
+        rgbValue[i]++;
+        
+      }
+      else if (rgbValue[i] > rgbTarget[i])
+      {
+        updateRequired = true; // need to update
+        rgbValue[i]--;
+      }
     }
 
-    if(rgbVal[0] == true ||rgbVal[1] == true || rgbVal[2] == true)
-      setColour(rgbVal[0],rgbVal[1],rgbVal[2]); // only do this if we need to
+    if(updateRequired == true)
+      setColour(rgbValue[0],rgbValue[1],rgbValue[2]); // only do this if we need to
   }
   
   if (timerExpired(readInputTimer, INPUT_READ_TIMEOUT)) // check for button press periodically
   {
-    setTimer(readInputTimer);  // reset timer
+    setTimer(&readInputTimer);  // reset timer
     
     readInputs();
     
@@ -153,6 +161,8 @@ void loop()
       Serial.println(msg);
       client.publish("/test/outTopic", msg);
       button_released = false;
+
+      colourFade = !colourFade; // temporary way of turning colourfade animation on and off
     }
   }
 }
@@ -198,20 +208,26 @@ void callback(char* topic, byte* payload, unsigned int length)
 
   /* ----- Split message by separator character and store rgb values ---- */
   char * command;
-  int rgb[3] = {'0','0','0'};
+  //int rgb[3] = {'0','0','0'};
   int index = 0;
   Serial.print("rgb(");
   command = strtok (input," (,)");  // this is the first part of the string (rgb) - ignore this
   while (index<3)
   {
     command = strtok (NULL, " (,)");
-    rgb[index] = atoi(command);
+    rgbTarget[index] = atoi(command);
     Serial.print(rgbTarget[index]);
     Serial.print(", ");
     index++;
   }
   Serial.println(")");
-  //setColour(rgb[0],rgb[1],rgb[2]);
+
+  if (colourFade == false)
+  {
+    for (int i=0; i<3; i++)
+      rgbValue[i] = rgbTarget[i];
+    setColour(rgbValue[0],rgbValue[1],rgbValue[2]);
+  }
  
 }
 
