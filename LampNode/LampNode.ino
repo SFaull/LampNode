@@ -30,18 +30,34 @@
   - Open the "Tools -> Board -> Board Manager" and click install for the ESP8266"
   - Select your ESP8266 in "Tools -> Board"
 
+EEPROM LUT:
+
+Address | Contents
+-----------------
+000     | R
+001     | G
+002     | B
+003     | Brightness
+
 */
 
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
+#include <ESP8266mDNS.h>
+#include <WiFiUdp.h>
+#include <ArduinoOTA.h>
+#include <EEPROM.h>
 #include <config.h> // this stores the private variables such as wifi ssid and password etc.
 #include <NeoPixelBrightnessBus.h> // instead of NeoPixelBus.h
 #include <stdio.h>
 #include <string.h>
 
+
 #define BUTTON D3               //button on pin D3
 #define INPUT_READ_TIMEOUT 50   //check for button pressed every 50ms
 #define LED_UPDATE_TIMEOUT 5   // update led every 20ms
+
+#define colorSaturation 255 // saturation of color constants
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -63,18 +79,13 @@ bool updateRequired;
 bool colourFade = true;
 
 const uint16_t PixelCount = 60; // this example assumes 3 pixels, making it smaller will cause a failure
-const uint8_t PixelPin = 12;  // make sure to set this to the correct pin, ignored for Esp8266
+const uint8_t PixelPin = 14;  // make sure to set this to the correct pin, ignored for Esp8266
 
-unsigned int rgbTarget[3] = {50,50,50}; // rgb value that LEDs are currently set to
+unsigned int rgbTarget[3] = {'0','0','0'}; // rgb value that LEDs are currently set to
 unsigned int rgbValue[3] = {'0','0','0'};  // rgb value which we aim to set the LEDs to
  
 
-#define colorSaturation 255 // saturation of color constants
-RgbColor red(colorSaturation, 0, 0);
-RgbColor green(0, colorSaturation, 0);
-RgbColor blue(0, 0, colorSaturation);
-RgbColor off(0,0,0);
-RgbColor white(colorSaturation, colorSaturation, colorSaturation);
+
 
 NeoPixelBrightnessBus<NeoRgbFeature, Neo800KbpsMethod> strip(PixelCount, PixelPin);
 
@@ -86,6 +97,11 @@ void setup()
   
   /* Setup serial */
   Serial.begin(115200);
+  Serial.flush();
+  /* swap serial port and then vak again - seems to fix pixel update issue */
+  Serial.swap();
+  delay(10);
+  Serial.swap();
   
   /* Setup WiFi and MQTT */ 
   setup_wifi();
@@ -96,10 +112,15 @@ void setup()
   setTimer(&readInputTimer);
   setTimer(&ledTimer);
 
+  /* Initialise EEPROM */
+  EEPROM.begin(512);
+  getRGB();
+
   /* Set LED state */
   strip.Begin();
   strip.Show();
-  //setColour(255,0,0);
+
+  
 }
 
 int switcheroo = 0;
@@ -131,7 +152,7 @@ void loop()
     }
 
     if(updateRequired == true)
-      setColour(rgbValue[0],rgbValue[1],rgbValue[2]); // only do this if we need to
+      applyColour(rgbValue[0],rgbValue[1],rgbValue[2]); // only do this if we need to
     else
     {
       if (switcheroo < 2)
@@ -194,7 +215,7 @@ void setup_wifi()
 
   Serial.println("");
   Serial.println("WiFi connected");
-  Serial.println("IP address: ");
+  Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 }
 
@@ -227,12 +248,13 @@ void callback(char* topic, byte* payload, unsigned int length)
     index++;
   }
   Serial.println(")");
+  setRGB();
 
   if (colourFade == false)
   {
     for (int i=0; i<3; i++)
       rgbValue[i] = rgbTarget[i];
-    setColour(rgbValue[0],rgbValue[1],rgbValue[2]);
+    applyColour(rgbValue[0],rgbValue[1],rgbValue[2]);
   }
  
 }
@@ -241,16 +263,11 @@ void reconnect() {
   // Loop until we're reconnected
   while (!client.connected()) 
   {
-    Serial.print("Attempting MQTT connection...");
-    /*
-    // Create a random client ID
-    String clientId = "ESP8266Client-";
-    clientId += String(random(0xffff), HEX);
-    */
+    Serial.print("Attempting MQTT connection... ");
     // Attempt to connect
     if (client.connect("LampNode01", MQTTuser, MQTTpassword)) 
     {
-      Serial.println("connected");
+      Serial.println("Connected");
       // Once connected, publish an announcement...
       client.publish("/test/outTopic", "LampNode01 connected");  // potentially not necessary
       // ... and resubscribe
@@ -282,7 +299,7 @@ void readInputs(void)
   last_button_state = button_state;
 }
 
-void setColour(uint8_t r, uint8_t g, uint8_t b)
+void applyColour(uint8_t r, uint8_t g, uint8_t b)
 {
   if (r < 256 && g < 256 && b < 256)
   {
@@ -291,7 +308,9 @@ void setColour(uint8_t r, uint8_t g, uint8_t b)
     {
       strip.SetPixelColor(i, colour);
     }
+    delay(1);
     strip.Show();
+    delay(1);
   }
   else
     Serial.println("Invalid RGB value, colour not set");
@@ -314,3 +333,64 @@ bool timerExpired(unsigned long startTime, unsigned long expiryTime)
   else
     return false;
 }
+
+void writeEEPROM(int address, int val)
+{
+  if ((address < 512) && (address >=0)) // make sure we are in range
+  {
+    EEPROM.write(address, val);
+    EEPROM.commit();
+  }
+  else
+  {
+    Serial.print("Invalid EEPROM write address: ");
+    Serial.println(address);
+  }
+}
+
+int readEEPROM(int address)
+{
+  if ((address < 512) && (address >=0)) // make sure we are in range
+  {
+    int val;
+    val = EEPROM.read(address);
+    return val;
+  }
+  else
+  {
+    Serial.print("Invalid EEPROM read address: ");
+    Serial.println(address);
+  }
+}
+
+/* gets the last saved RGB value from the eeprom and stores it in rgbTarget */
+void getRGB(void)
+{
+  for (int addr = 0; addr < 3; addr++)
+  {
+    rgbTarget[addr] = readEEPROM(addr);
+
+    Serial.print("EEPROM read: ");
+    Serial.print("[");
+    Serial.print(addr);
+    Serial.print("] ");
+    Serial.println(rgbTarget[addr]);
+  }
+}
+
+/* stores the last RGB value from rgbTarget in the eeprom */
+void setRGB(void)
+{
+  Serial.println("Saving RGB value");
+  for (int addr = 0; addr < 3; addr++)
+  {
+    writeEEPROM(addr, rgbTarget[addr]);
+    
+    Serial.print("EEPROM write: ");
+    Serial.print("[");
+    Serial.print(addr);
+    Serial.print("] ");
+    Serial.println(rgbTarget[addr]);
+  }
+}
+
