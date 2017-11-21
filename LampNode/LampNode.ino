@@ -137,9 +137,14 @@ void loop()
     switch (Mode)
     {
       case OFF:
+        // TODO: should only do these tasks once...
+        for(int i=0; i<3; i++)
+          rgbValue[i] = 0;
+        applyColour(rgbValue[0],rgbValue[1],rgbValue[2]);
       break;
 
       case NORMAL:
+        // TODO: should obtain previous rgbval/target from eeprom on mode select...
         fadeToColourTarget();
       break;
 
@@ -213,42 +218,88 @@ void setup_wifi()
 
 void callback(char* topic, byte* payload, unsigned int length) 
 {
-  char input[length];
-  /* --------------- Print incoming message to serial ------------------ */
   Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("] ");
+  
+  /* --------------- Print incoming message to serial ------------------ */
+  char input[length+1];
   for (int i = 0; i < length; i++) 
-  {
-    Serial.print((char)payload[i]);
     input[i] = (char)payload[i];  // store payload as char array
+  input[length] = '\0'; // dont forget to add a termination character
+  
+  Serial.println(input);
+  
+  if (strcmp(topic,"/LampNode/Colour")==0)
+  {  
+    /* ----- Split message by separator character and store rgb values ---- */
+    char * command;
+    //int rgb[3] = {'0','0','0'};
+    int index = 0;
+    Serial.print("rgb(");
+    command = strtok (input," (,)");  // this is the first part of the string (rgb) - ignore this
+    while (index<3)
+    {
+      command = strtok (NULL, " (,)");
+      rgbTarget[index] = atoi(command);
+      Serial.print(rgbTarget[index]);
+      Serial.print(", ");
+      index++;
+    }
+    Serial.println(")");
+    setRGB();
+  
+    if (Transition != FADE) // if not fading, set colour to target immediately
+    {
+      for (int i=0; i<3; i++)
+        rgbValue[i] = rgbTarget[i];
+      applyColour(rgbValue[0],rgbValue[1],rgbValue[2]);
+    }
+  } 
+  
+  if (strcmp(topic,"/LampNode/Mode")==0)
+  {    
+    Serial.print("Mode set to: ");
+    
+    if(strcmp(input,"Off")==0)
+    {
+      Mode = OFF;
+      Serial.println("OFF");
+    }
+    if(strcmp(input,"Normal")==0)
+    {
+      Mode = NORMAL;
+      Serial.println("NORMAL");
+    }
+    if(strcmp(input,"Party")==0)
+    {
+      Mode = PARTY;
+      Serial.println("PARTY");
+    }
   }
-  Serial.println();
+  
+  if (strcmp(topic,"/LampNode/Transition")==0)
+  {        
+    if(strcmp(input,"Fade")==0)
+    {
+      Transition = FADE;
+      Serial.println("FADE");
+    }
+    if(strcmp(input,"Instant")==0)
+    {
+      Transition = INSTANT;
+      Serial.println("INSTANT");
+    }
+  }
 
-  /* ----- Split message by separator character and store rgb values ---- */
-  char * command;
-  //int rgb[3] = {'0','0','0'};
-  int index = 0;
-  Serial.print("rgb(");
-  command = strtok (input," (,)");  // this is the first part of the string (rgb) - ignore this
-  while (index<3)
-  {
-    command = strtok (NULL, " (,)");
-    rgbTarget[index] = atoi(command);
-    Serial.print(rgbTarget[index]);
-    Serial.print(", ");
-    index++;
+  if (strcmp(topic,"/LampNode/Comms")==0)
+  {               
+    if(strcmp(input,"Poke")==0)
+    {
+      // perform whatever fun animation you desire on touch
+      Serial.println("POKE");
+    }
   }
-  Serial.println(")");
-  setRGB();
-
-  if (Transition != FADE) // if not fading, set colour to target immediately
-  {
-    for (int i=0; i<3; i++)
-      rgbValue[i] = rgbTarget[i];
-    applyColour(rgbValue[0],rgbValue[1],rgbValue[2]);
-  }
- 
 }
 
 void reconnect() {
@@ -261,9 +312,12 @@ void reconnect() {
     {
       Serial.println("Connected");
       // Once connected, publish an announcement...
-      client.publish("/test/outTopic", "LampNode01 connected");  // potentially not necessary
+      client.publish("/LampNode/Comms", "LampNode01 connected");  // potentially not necessary
       // ... and resubscribe
-      client.subscribe("/test/inTopic");
+      client.subscribe("/LampNode/Colour");
+      client.subscribe("/LampNode/Comms");
+      client.subscribe("/LampNode/Mode");
+      client.subscribe("/LampNode/Transition");
     } 
     else 
     {
