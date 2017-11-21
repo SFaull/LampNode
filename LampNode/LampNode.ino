@@ -74,9 +74,6 @@ char msg[50];        // message buffer
 // Flags
 bool button_pressed = false; // true if a button press has been registered
 bool button_released = false; // true if a button release has been registered
-bool updateRequired;
-
-bool colourFade = true;
 
 const uint16_t PixelCount = 60; // this example assumes 3 pixels, making it smaller will cause a failure
 const uint8_t PixelPin = 14;  // make sure to set this to the correct pin, ignored for Esp8266
@@ -84,8 +81,8 @@ const uint8_t PixelPin = 14;  // make sure to set this to the correct pin, ignor
 unsigned int rgbTarget[3] = {'0','0','0'}; // rgb value that LEDs are currently set to
 unsigned int rgbValue[3] = {'0','0','0'};  // rgb value which we aim to set the LEDs to
  
-
-
+enum {OFF, NORMAL, PARTY} Mode;   // various modes of operation
+enum {FADE, INSTANT} Transition;  // The way in which the lamp animates between colours
 
 NeoPixelBrightnessBus<NeoRgbFeature, Neo800KbpsMethod> strip(PixelCount, PixelPin);
 
@@ -98,9 +95,9 @@ void setup()
   /* Setup serial */
   Serial.begin(115200);
   Serial.flush();
-  /* swap serial port and then vak again - seems to fix pixel update issue */
+  /* swap serial port and then back again - seems to fix pixel update issue */
   Serial.swap();
-  delay(10);
+  delay(200);
   Serial.swap();
   
   /* Setup WiFi and MQTT */ 
@@ -120,48 +117,45 @@ void setup()
   strip.Begin();
   strip.Show();
 
-  
+  Mode = NORMAL;
+  Transition = FADE;
 }
-
-int switcheroo = 0;
 
 void loop() 
 {
+  /* Check WiFi Connection */
   if (!client.connected()) 
     reconnect();
   client.loop();
   
   unsigned long now = millis();  // get elapsed time
 
-  if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT) && colourFade == true)
+  /* Periodically update the LEDs */
+  if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
   {
     setTimer(&ledTimer); // reset timer
-    
-    updateRequired = false; // assume no update required
-    
-    if (rgbValue[switcheroo] < rgbTarget[switcheroo])
+    switch (Mode)
     {
-      updateRequired = true; // need to update
-      rgbValue[switcheroo]++;
-      
-    }
-    else if (rgbValue[switcheroo] > rgbTarget[switcheroo])
-    {
-      updateRequired = true; // need to update
-      rgbValue[switcheroo]--;
-    }
+      case OFF:
+      break;
 
-    if(updateRequired == true)
-      applyColour(rgbValue[0],rgbValue[1],rgbValue[2]); // only do this if we need to
-    else
-    {
-      if (switcheroo < 2)
-        switcheroo++;
-      else
-        switcheroo = 0;
+      case NORMAL:
+        fadeToColourTarget();
+      break;
+
+      case PARTY:
+        fadeToColourTarget();
+        //music2Brightness();
+      break;
+
+      default:
+        // unknown state - do nothing
+      break;
     }
+    
   }
-  
+
+  /* Periodically read the inputs */
   if (timerExpired(readInputTimer, INPUT_READ_TIMEOUT)) // check for button press periodically
   {
     setTimer(&readInputTimer);  // reset timer
@@ -188,8 +182,6 @@ void loop()
       Serial.println(msg);
       client.publish("/test/outTopic", msg);
       button_released = false;
-
-      colourFade = !colourFade; // temporary way of turning colourfade animation on and off
     }
   }
 }
@@ -250,7 +242,7 @@ void callback(char* topic, byte* payload, unsigned int length)
   Serial.println(")");
   setRGB();
 
-  if (colourFade == false)
+  if (Transition != FADE) // if not fading, set colour to target immediately
   {
     for (int i=0; i<3; i++)
       rgbValue[i] = rgbTarget[i];
@@ -299,6 +291,34 @@ void readInputs(void)
   last_button_state = button_state;
 }
 
+void fadeToColourTarget(void)
+{
+    bool updateRequired = false; // assume no update required
+    static int switcheroo = 0;
+    
+    if (rgbValue[switcheroo] < rgbTarget[switcheroo])
+    {
+      updateRequired = true; // need to update
+      rgbValue[switcheroo]++;
+      
+    }
+    else if (rgbValue[switcheroo] > rgbTarget[switcheroo])
+    {
+      updateRequired = true; // need to update
+      rgbValue[switcheroo]--;
+    }
+
+    if(updateRequired == true)
+      applyColour(rgbValue[0],rgbValue[1],rgbValue[2]); // only do this if we need to
+    else
+    {
+      if (switcheroo < 2)
+        switcheroo++;
+      else
+        switcheroo = 0;
+    }
+}
+
 void applyColour(uint8_t r, uint8_t g, uint8_t b)
 {
   if (r < 256 && g < 256 && b < 256)
@@ -308,12 +328,24 @@ void applyColour(uint8_t r, uint8_t g, uint8_t b)
     {
       strip.SetPixelColor(i, colour);
     }
-    delay(1);
     strip.Show();
-    delay(1);
   }
   else
     Serial.println("Invalid RGB value, colour not set");
+}
+
+void music2Brightness(void)
+{
+  static int ADCval, lastADCval, brightness = 0 ;
+  ADCval = analogRead(A0);
+  if (ADCval != lastADCval)
+  {
+    Serial.print("ADC: "); 
+    Serial.println(ADCval); 
+    brightness = map(ADCval, 0, 1023, 0, 255);
+    strip.SetBrightness(brightness);
+    lastADCval = ADCval;
+  }
 }
 
 /* pass this function a pointer to an unsigned long to store the start time for the timer */
