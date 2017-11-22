@@ -55,7 +55,7 @@ Address | Contents
 
 #define BUTTON D3               //button on pin D3
 #define INPUT_READ_TIMEOUT 50   //check for button pressed every 50ms
-#define LED_UPDATE_TIMEOUT 5   // update led every 20ms
+#define LED_UPDATE_TIMEOUT 20   // update led every 20ms
 
 #define colorSaturation 255 // saturation of color constants
 
@@ -74,12 +74,14 @@ char msg[50];        // message buffer
 // Flags
 bool button_pressed = false; // true if a button press has been registered
 bool button_released = false; // true if a button release has been registered
+bool target_met = false;
 
 const uint16_t PixelCount = 60; // this example assumes 3 pixels, making it smaller will cause a failure
 const uint8_t PixelPin = 14;  // make sure to set this to the correct pin, ignored for Esp8266
 
 unsigned int target_colour[3] = {'0','0','0'}; // rgb value that LEDs are currently set to
 unsigned int current_colour[3] = {'0','0','0'};  // rgb value which we aim to set the LEDs to
+unsigned int transition[50][3];
  
 enum {OFF, NORMAL, PARTY} Mode;   // various modes of operation
 enum {FADE, INSTANT} Transition;  // The way in which the lamp animates between colours
@@ -137,10 +139,7 @@ void loop()
     switch (Mode)
     {
       case OFF:
-        // TODO: should only do these tasks once...
-        for(int i=0; i<3; i++)
-          current_colour[i] = 0;
-        applyColour(current_colour[0],current_colour[1],current_colour[2]);
+        
       break;
 
       case NORMAL:
@@ -248,12 +247,6 @@ void callback(char* topic, byte* payload, unsigned int length)
     }
     Serial.println(")");
     setColourTarget(temp[0],temp[1],temp[2]);
-  
-    if (Transition != FADE) // if not fading, set colour to target immediately
-    {
-      setColour(temp[0],temp[1],temp[2]);
-      applyColour(current_colour[0],current_colour[1],current_colour[2]);
-    }
   } 
   
   if (strcmp(topic,"/LampNode/Mode")==0)
@@ -264,11 +257,13 @@ void callback(char* topic, byte* payload, unsigned int length)
     {
       Mode = OFF;
       Serial.println("OFF");
+      setColour(0,0,0);
     }
     if(strcmp(input,"Normal")==0)
     {
       Mode = NORMAL;
       Serial.println("NORMAL");
+      setColourTarget(target_colour[0],target_colour[1],target_colour[2]); 
     }
     if(strcmp(input,"Party")==0)
     {
@@ -346,29 +341,17 @@ void readInputs(void)
 
 void fadeToColourTarget(void)
 {
-    bool updateRequired = false; // assume no update required
-    static int switcheroo = 0;
-    
-    if (current_colour[switcheroo] < target_colour[switcheroo])
+    static int addr = 0;
+    if(!target_met)
     {
-      updateRequired = true; // need to update
-      current_colour[switcheroo]++;
+      setColour(transition[addr][0],transition[addr][1],transition[addr][2]);
+      addr++;
       
-    }
-    else if (current_colour[switcheroo] > target_colour[switcheroo])
-    {
-      updateRequired = true; // need to update
-      current_colour[switcheroo]--;
-    }
-
-    if(updateRequired == true)
-      applyColour(current_colour[0],current_colour[1],current_colour[2]); // only do this if we need to
-    else
-    {
-      if (switcheroo < 2)
-        switcheroo++;
-      else
-        switcheroo = 0;
+      if (addr>=50)
+      {
+        target_met = true;
+        addr = 0;
+      }      
     }
 }
 
@@ -484,13 +467,41 @@ void setColour(int r, int g, int b)
   current_colour[0] = r;
   current_colour[1] = g;
   current_colour[2] = b;
+
+  applyColour(current_colour[0],current_colour[1],current_colour[2]);
 }
 
 void setColourTarget(int r, int g, int b)
 {
+  target_met = false;
+  
   target_colour[0] = r;
   target_colour[1] = g;
   target_colour[2] = b;
 
+  if (Transition != FADE) // if not fading, set colour to target immediately
+  {
+    setColour(r,g,b);
+  }
+
   saveColourToMemory();
+  setColourTransition();
 }
+
+void setColourTransition(void)
+{
+  for(int addr=0; addr<50; addr++)  // for each element in the array
+  {
+    for (int i=0; i<3; i++)  // for each colour in turn
+    {
+      transition[addr][i] = map(addr, 0, 49, current_colour[i], target_colour[i]); // compute the proportional colour value
+    }
+    Serial.print(transition[addr][0]);
+    Serial.print(",");
+    Serial.print(transition[addr][1]);
+    Serial.print(",");
+    Serial.println(transition[addr][2]);
+    
+  }
+}
+
