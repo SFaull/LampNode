@@ -78,8 +78,8 @@ bool button_released = false; // true if a button release has been registered
 const uint16_t PixelCount = 60; // this example assumes 3 pixels, making it smaller will cause a failure
 const uint8_t PixelPin = 14;  // make sure to set this to the correct pin, ignored for Esp8266
 
-unsigned int rgbTarget[3] = {'0','0','0'}; // rgb value that LEDs are currently set to
-unsigned int rgbValue[3] = {'0','0','0'};  // rgb value which we aim to set the LEDs to
+unsigned int target_colour[3] = {'0','0','0'}; // rgb value that LEDs are currently set to
+unsigned int current_colour[3] = {'0','0','0'};  // rgb value which we aim to set the LEDs to
  
 enum {OFF, NORMAL, PARTY} Mode;   // various modes of operation
 enum {FADE, INSTANT} Transition;  // The way in which the lamp animates between colours
@@ -111,7 +111,7 @@ void setup()
 
   /* Initialise EEPROM */
   EEPROM.begin(512);
-  getRGB();
+  getColourFromMemory();
 
   /* Set LED state */
   strip.Begin();
@@ -139,8 +139,8 @@ void loop()
       case OFF:
         // TODO: should only do these tasks once...
         for(int i=0; i<3; i++)
-          rgbValue[i] = 0;
-        applyColour(rgbValue[0],rgbValue[1],rgbValue[2]);
+          current_colour[i] = 0;
+        applyColour(current_colour[0],current_colour[1],current_colour[2]);
       break;
 
       case NORMAL:
@@ -234,26 +234,25 @@ void callback(char* topic, byte* payload, unsigned int length)
   {  
     /* ----- Split message by separator character and store rgb values ---- */
     char * command;
-    //int rgb[3] = {'0','0','0'};
     int index = 0;
+    int temp[3];
     Serial.print("rgb(");
     command = strtok (input," (,)");  // this is the first part of the string (rgb) - ignore this
     while (index<3)
     {
       command = strtok (NULL, " (,)");
-      rgbTarget[index] = atoi(command);
-      Serial.print(rgbTarget[index]);
+      temp[index] = atoi(command);
+      Serial.print(temp[index]);
       Serial.print(", ");
       index++;
     }
     Serial.println(")");
-    setRGB();
+    setColourTarget(temp[0],temp[1],temp[2]);
   
     if (Transition != FADE) // if not fading, set colour to target immediately
     {
-      for (int i=0; i<3; i++)
-        rgbValue[i] = rgbTarget[i];
-      applyColour(rgbValue[0],rgbValue[1],rgbValue[2]);
+      setColour(temp[0],temp[1],temp[2]);
+      applyColour(current_colour[0],current_colour[1],current_colour[2]);
     }
   } 
   
@@ -350,20 +349,20 @@ void fadeToColourTarget(void)
     bool updateRequired = false; // assume no update required
     static int switcheroo = 0;
     
-    if (rgbValue[switcheroo] < rgbTarget[switcheroo])
+    if (current_colour[switcheroo] < target_colour[switcheroo])
     {
       updateRequired = true; // need to update
-      rgbValue[switcheroo]++;
+      current_colour[switcheroo]++;
       
     }
-    else if (rgbValue[switcheroo] > rgbTarget[switcheroo])
+    else if (current_colour[switcheroo] > target_colour[switcheroo])
     {
       updateRequired = true; // need to update
-      rgbValue[switcheroo]--;
+      current_colour[switcheroo]--;
     }
 
     if(updateRequired == true)
-      applyColour(rgbValue[0],rgbValue[1],rgbValue[2]); // only do this if we need to
+      applyColour(current_colour[0],current_colour[1],current_colour[2]); // only do this if we need to
     else
     {
       if (switcheroo < 2)
@@ -449,34 +448,49 @@ int readEEPROM(int address)
   }
 }
 
-/* gets the last saved RGB value from the eeprom and stores it in rgbTarget */
-void getRGB(void)
+/* gets the last saved RGB value from the eeprom and stores it in target_colour */
+void getColourFromMemory(void)
 {
   for (int addr = 0; addr < 3; addr++)
   {
-    rgbTarget[addr] = readEEPROM(addr);
+    target_colour[addr] = readEEPROM(addr);
 
     Serial.print("EEPROM read: ");
     Serial.print("[");
     Serial.print(addr);
     Serial.print("] ");
-    Serial.println(rgbTarget[addr]);
+    Serial.println(target_colour[addr]);
   }
 }
 
-/* stores the last RGB value from rgbTarget in the eeprom */
-void setRGB(void)
+/* stores the last RGB value from target_colour in the eeprom */
+void saveColourToMemory(void)
 {
   Serial.println("Saving RGB value");
   for (int addr = 0; addr < 3; addr++)
   {
-    writeEEPROM(addr, rgbTarget[addr]);
+    writeEEPROM(addr, target_colour[addr]);
     
     Serial.print("EEPROM write: ");
     Serial.print("[");
     Serial.print(addr);
     Serial.print("] ");
-    Serial.println(rgbTarget[addr]);
+    Serial.println(target_colour[addr]);
   }
 }
 
+void setColour(int r, int g, int b)
+{
+  current_colour[0] = r;
+  current_colour[1] = g;
+  current_colour[2] = b;
+}
+
+void setColourTarget(int r, int g, int b)
+{
+  target_colour[0] = r;
+  target_colour[1] = g;
+  target_colour[2] = b;
+
+  saveColourToMemory();
+}
