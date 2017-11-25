@@ -75,12 +75,14 @@ char msg[50];        // message buffer
 bool button_pressed = false; // true if a button press has been registered
 bool button_released = false; // true if a button release has been registered
 bool target_met = false;
+bool charging_animation=false;
+bool group_animation=false;
 
 const uint16_t PixelCount = 60; // this example assumes 3 pixels, making it smaller will cause a failure
 const uint8_t PixelPin = 14;  // make sure to set this to the correct pin, ignored for Esp8266
 
-unsigned int target_colour[3] = {'0','0','0'}; // rgb value that LEDs are currently set to
-unsigned int current_colour[3] = {'0','0','0'};  // rgb value which we aim to set the LEDs to
+unsigned int target_colour[3] = {0,0,0}; // rgb value that LEDs are currently set to
+unsigned int current_colour[3] = {0,0,0};  // rgb value which we aim to set the LEDs to
 unsigned int transition[50][3];
  
 enum {OFF, NORMAL, PARTY} Mode;   // various modes of operation
@@ -114,6 +116,7 @@ void setup()
   /* Initialise EEPROM */
   EEPROM.begin(512);
   getColourFromMemory();
+  setColourTarget(target_colour[0],target_colour[1],target_colour[2]);
 
   /* Set LED state */
   strip.Begin();
@@ -132,32 +135,50 @@ void loop()
   
   unsigned long now = millis();  // get elapsed time
 
-  /* Periodically update the LEDs */
-  if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
+
+  switch (Mode)
   {
-    setTimer(&ledTimer); // reset timer
-    switch (Mode)
-    {
-      case OFF:
-        
-      break;
+    case OFF:
+      
+    break;
 
-      case NORMAL:
-        // TODO: should obtain previous rgbval/target from eeprom on mode select...
+    case NORMAL:
+      /* Periodically update the LEDs */
+      if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
+      {
+        setTimer(&ledTimer); // reset timer
+        /*
+        if(charging_animation)
+        {
+          chargingAnimation();
+        }
+        if(group_animation)
+        {
+          groupAnimation();
+        }
+        */
         fadeToColourTarget();
-      break;
+      }
 
-      case PARTY:
+    break;
+
+    case PARTY:
+      /* Periodically update the LEDs */
+      if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
+      {
+        setTimer(&ledTimer); // reset timer
         fadeToColourTarget();
         //music2Brightness();
-      break;
+      }
 
-      default:
-        // unknown state - do nothing
-      break;
-    }
-    
+    break;
+
+    default:
+      // unknown state - do nothing
+    break;
   }
+  
+
 
   /* Periodically read the inputs */
   if (timerExpired(readInputTimer, INPUT_READ_TIMEOUT)) // check for button press periodically
@@ -172,6 +193,7 @@ void loop()
       lastPushed = now; // start the timer 
       Serial.print("Button pushed... ");
       button_pressed = false;
+      charging_animation = true;
     }
     
     if (button_released)
@@ -186,6 +208,8 @@ void loop()
       Serial.println(msg);
       client.publish("/test/outTopic", msg);
       button_released = false;
+      charging_animation=false;
+      group_animation=true;
     }
   }
 }
@@ -328,7 +352,7 @@ void readInputs(void)
 {
   static bool button_state, last_button_state = false; // Remembers the current and previous button states
   
-  button_state = !digitalRead(BUTTON); // read button state (active low)
+  button_state = digitalRead(BUTTON); // read button state (active high)
   
   if (button_state && !last_button_state) // on a rising edge we register a button press
     button_pressed = true;
@@ -354,6 +378,38 @@ void fadeToColourTarget(void)
       }      
     }
 }
+
+int led = 60;
+
+void chargingAnimation(void)
+{
+  Serial.println("charging");
+  
+  RgbColor colour(0,0,0);
+  strip.SetPixelColor(led, colour);
+  strip.Show();
+  if (led>0)
+    led--;
+}
+
+void groupAnimation(void)
+{
+  static int count = 0;
+  RgbColor colour(current_colour[0],current_colour[1],current_colour[2]);
+  strip.SetPixelColor(led, colour);
+  strip.Show();
+  
+  count++;
+  led++;
+  if (led>=60)
+  {
+    count = 0;
+    led = 60;
+    group_animation = false;
+    setColourTarget(target_colour[0],target_colour[1],target_colour[2]); // go back to original colour
+  }
+}
+
 
 void applyColour(uint8_t r, uint8_t g, uint8_t b)
 {
