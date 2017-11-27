@@ -46,8 +46,8 @@
 
 /* EEPROM memory map */
 #define MEM_RED         0
-#define MEM_BLUE        1
-#define MEM_GREE        2
+#define MEM_GREEN       1
+#define MEM_BLUE        2
 #define MEM_MODE        3
 #define MEM_TRANSITION  4
 
@@ -87,8 +87,11 @@ unsigned int current_colour[3] = {0,0,0};  // rgb value which we aim to set the 
 unsigned int transition[50][3];
 unsigned int pulse[30][3];
  
-enum {OFF, NORMAL, PARTY} Mode;   // various modes of operation
-enum {FADE, INSTANT} Transition;  // The way in which the lamp animates between colours
+enum Modes {OFF, NORMAL, PARTY};   // various modes of operation
+enum Transitions {FADE, INSTANT};  // The way in which the lamp animates between colours
+
+enum Modes Mode;
+enum Transitions Transition;
 
 NeoPixelBrightnessBus<NeoRgbFeature, Neo800KbpsMethod> strip(PixelCount, PixelPin);
 
@@ -119,8 +122,8 @@ void setup()
   EEPROM.begin(512);
   getColourFromMemory();
   setColourTarget(target_colour[0],target_colour[1],target_colour[2]);
-  Mode = readEEPROM(MEM_MODE);
-  Transition = readEEPROM(MEM_TRANSITION);
+  Mode = (Modes)readEEPROM(MEM_MODE);
+  Transition = (Transitions)readEEPROM(MEM_TRANSITION);
 
   /* Set LED state */
   strip.Begin();
@@ -149,7 +152,7 @@ void loop()
       {
         setTimer(&ledTimer); // reset timer
         if(pulse_animation)
-          pulse();
+          pulseEffect();
         else
         fadeToColourTarget();
       }
@@ -186,8 +189,8 @@ void loop()
       //start conting
       lastPushed = now; // start the timer 
       Serial.print("Button pushed... ");
-      button_pressed = false;
       client.publish("/LampNode/Comms", "Press");
+      button_pressed = false;
     }
     
     if (button_released)
@@ -201,8 +204,8 @@ void loop()
       Serial.print("Publish message: ");
       Serial.println(msg);
       client.publish("/test/outTopic", msg);
-      button_released = false;
       client.publish("/LampNode/Comms", "Release");
+      button_released = false;
     }
   }
 }
@@ -313,6 +316,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     {
       // perform whatever fun animation you desire on touch
       pulse_animation = true;
+      pulse_addr = 0;
       generatePulse();
       Serial.println("Press");
     }
@@ -320,7 +324,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     {
       // perform whatever fun animation you desire on touch
       pulse_animation = false;
-      client.publish("/LampNode/Comms", "Release");
+      setColourTarget(target_colour[0],target_colour[1],target_colour[2]);
       Serial.println("Release");
     }
   }
@@ -358,7 +362,7 @@ void readInputs(void)
 {
   static bool button_state, last_button_state = false; // Remembers the current and previous button states
   
-  button_state = digitalRead(BUTTON); // read button state (active high)
+  button_state = !digitalRead(BUTTON); // read button state (active high)
   
   if (button_state && !last_button_state) // on a rising edge we register a button press
     button_pressed = true;
@@ -480,7 +484,7 @@ void getColourFromMemory(void)
 void saveColourToMemory(void)
 {
   Serial.println("Saving RGB value");
-  for (int addr = MEM_RED; addr <= BLUE; addr++)
+  for (int addr = MEM_RED; addr <= MEM_BLUE; addr++)
   {
     writeEEPROM(addr, target_colour[addr]);
     
@@ -541,7 +545,7 @@ void generatePulse(void)
   {
     for (int i=0; i<3; i++)  // for each colour in turn
     {
-      pulse[addr][i] = map(addr, 0, 29, current_colour[i]*0.2, current_colour[i]); // compute the proportional colour value
+      pulse[addr][i] = map(addr, 0, 29, current_colour[i], current_colour[i]/5); // compute the proportional colour value
     }
     Serial.print(pulse[addr][0]);
     Serial.print(",");
@@ -552,18 +556,26 @@ void generatePulse(void)
   }
 }
 
-void pulse(void)
+void pulseEffect(void)
 {
   setColour(pulse[pulse_addr][0],pulse[pulse_addr][1],pulse[pulse_addr][2]);
 
-  if (pulse_addr>=30)
-    pulse_direction = 1;
+    Serial.print(pulse[pulse_addr][0]);
+    Serial.print(",");
+    Serial.print(pulse[pulse_addr][1]);
+    Serial.print(",");
+    Serial.print(pulse[pulse_addr][2]);
+    Serial.print("---");
+    Serial.println(pulse_addr);
+
+  if (pulse_addr>=29)
+    pulse_direction = 0;
   if (pulse_addr<=0)
-    pulse_direction = 0;  
+    pulse_direction = 1;  
   
   if (pulse_direction)
     pulse_addr++;
   else
-    pulse--;
+    pulse_addr--;
 }
 
