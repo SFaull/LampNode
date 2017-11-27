@@ -52,12 +52,12 @@
 #define MEM_TRANSITION  4
 
 
-
+/* Physical connections */
 #define BUTTON D3               //button on pin D3
+
+/* Timers */
 #define INPUT_READ_TIMEOUT 50   //check for button pressed every 50ms
 #define LED_UPDATE_TIMEOUT 20   // update led every 20ms
-
-#define colorSaturation 255 // saturation of color constants
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -75,8 +75,9 @@ char msg[50];        // message buffer
 bool button_pressed = false; // true if a button press has been registered
 bool button_released = false; // true if a button release has been registered
 bool target_met = false;
-bool charging_animation=false;
-bool group_animation=false;
+bool pulse_animation = false;
+bool pulse_direction = 1;
+int pulse_addr = 0;
 
 const uint16_t PixelCount = 60; // this example assumes 3 pixels, making it smaller will cause a failure
 const uint8_t PixelPin = 14;  // make sure to set this to the correct pin, ignored for Esp8266
@@ -84,6 +85,7 @@ const uint8_t PixelPin = 14;  // make sure to set this to the correct pin, ignor
 unsigned int target_colour[3] = {0,0,0}; // rgb value that LEDs are currently set to
 unsigned int current_colour[3] = {0,0,0};  // rgb value which we aim to set the LEDs to
 unsigned int transition[50][3];
+unsigned int pulse[30][3];
  
 enum {OFF, NORMAL, PARTY} Mode;   // various modes of operation
 enum {FADE, INSTANT} Transition;  // The way in which the lamp animates between colours
@@ -146,16 +148,9 @@ void loop()
       if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
       {
         setTimer(&ledTimer); // reset timer
-        /*
-        if(charging_animation)
-        {
-          chargingAnimation();
-        }
-        if(group_animation)
-        {
-          groupAnimation();
-        }
-        */
+        if(pulse_animation)
+          pulse();
+        else
         fadeToColourTarget();
       }
 
@@ -192,7 +187,7 @@ void loop()
       lastPushed = now; // start the timer 
       Serial.print("Button pushed... ");
       button_pressed = false;
-      charging_animation = true;
+      client.publish("/LampNode/Comms", "Press");
     }
     
     if (button_released)
@@ -207,8 +202,7 @@ void loop()
       Serial.println(msg);
       client.publish("/test/outTopic", msg);
       button_released = false;
-      charging_animation=false;
-      group_animation=true;
+      client.publish("/LampNode/Comms", "Release");
     }
   }
 }
@@ -315,10 +309,19 @@ void callback(char* topic, byte* payload, unsigned int length)
 
   if (strcmp(topic,"/LampNode/Comms")==0)
   {               
-    if(strcmp(input,"Poke")==0)
+    if(strcmp(input,"Press")==0)
     {
       // perform whatever fun animation you desire on touch
-      Serial.println("POKE");
+      pulse_animation = true;
+      generatePulse();
+      Serial.println("Press");
+    }
+    if(strcmp(input,"Release")==0)
+    {
+      // perform whatever fun animation you desire on touch
+      pulse_animation = false;
+      client.publish("/LampNode/Comms", "Release");
+      Serial.println("Release");
     }
   }
 }
@@ -381,38 +384,6 @@ void fadeToColourTarget(void)
       }      
     }
 }
-
-int led = 60;
-
-void chargingAnimation(void)
-{
-  Serial.println("charging");
-  
-  RgbColor colour(0,0,0);
-  strip.SetPixelColor(led, colour);
-  strip.Show();
-  if (led>0)
-    led--;
-}
-
-void groupAnimation(void)
-{
-  static int count = 0;
-  RgbColor colour(current_colour[0],current_colour[1],current_colour[2]);
-  strip.SetPixelColor(led, colour);
-  strip.Show();
-  
-  count++;
-  led++;
-  if (led>=60)
-  {
-    count = 0;
-    led = 60;
-    group_animation = false;
-    setColourTarget(target_colour[0],target_colour[1],target_colour[2]); // go back to original colour
-  }
-}
-
 
 void applyColour(uint8_t r, uint8_t g, uint8_t b)
 {
@@ -562,5 +533,37 @@ void setColourTransition(void)
     Serial.println(transition[addr][2]);
     
   }
+}
+
+void generatePulse(void)
+{
+  for(int addr=0; addr<30; addr++)  // for each element in the array
+  {
+    for (int i=0; i<3; i++)  // for each colour in turn
+    {
+      pulse[addr][i] = map(addr, 0, 29, current_colour[i]*0.2, current_colour[i]); // compute the proportional colour value
+    }
+    Serial.print(pulse[addr][0]);
+    Serial.print(",");
+    Serial.print(pulse[addr][1]);
+    Serial.print(",");
+    Serial.println(pulse[addr][2]);
+    
+  }
+}
+
+void pulse(void)
+{
+  setColour(pulse[pulse_addr][0],pulse[pulse_addr][1],pulse[pulse_addr][2]);
+
+  if (pulse_addr>=30)
+    pulse_direction = 1;
+  if (pulse_addr<=0)
+    pulse_direction = 0;  
+  
+  if (pulse_direction)
+    pulse_addr++;
+  else
+    pulse--;
 }
 
