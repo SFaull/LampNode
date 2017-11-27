@@ -30,15 +30,6 @@
   - Open the "Tools -> Board -> Board Manager" and click install for the ESP8266"
   - Select your ESP8266 in "Tools -> Board"
 
-EEPROM LUT:
-
-Address | Contents
------------------
-000     | R
-001     | G
-002     | B
-003     | Brightness
-
 */
 
 #include <ESP8266WiFi.h>
@@ -51,6 +42,15 @@ Address | Contents
 #include <NeoPixelBrightnessBus.h> // instead of NeoPixelBus.h
 #include <stdio.h>
 #include <string.h>
+
+
+/* EEPROM memory map */
+#define MEM_RED         0
+#define MEM_BLUE        1
+#define MEM_GREE        2
+#define MEM_MODE        3
+#define MEM_TRANSITION  4
+
 
 
 #define BUTTON D3               //button on pin D3
@@ -117,13 +117,12 @@ void setup()
   EEPROM.begin(512);
   getColourFromMemory();
   setColourTarget(target_colour[0],target_colour[1],target_colour[2]);
+  Mode = readEEPROM(MEM_MODE);
+  Transition = readEEPROM(MEM_TRANSITION);
 
   /* Set LED state */
   strip.Begin();
   strip.Show();
-
-  Mode = NORMAL;
-  Transition = FADE;
 }
 
 void loop() 
@@ -294,6 +293,8 @@ void callback(char* topic, byte* payload, unsigned int length)
       Mode = PARTY;
       Serial.println("PARTY");
     }
+    // save to eeprom
+     writeEEPROM(MEM_MODE, Mode);
   }
   
   if (strcmp(topic,"/LampNode/Transition")==0)
@@ -308,6 +309,8 @@ void callback(char* topic, byte* payload, unsigned int length)
       Transition = INSTANT;
       Serial.println("INSTANT");
     }
+    // save to eeprom
+     writeEEPROM(MEM_TRANSITION, Transition);
   }
 
   if (strcmp(topic,"/LampNode/Comms")==0)
@@ -490,7 +493,7 @@ int readEEPROM(int address)
 /* gets the last saved RGB value from the eeprom and stores it in target_colour */
 void getColourFromMemory(void)
 {
-  for (int addr = 0; addr < 3; addr++)
+  for (int addr = MEM_RED; addr <= MEM_BLUE; addr++)
   {
     target_colour[addr] = readEEPROM(addr);
 
@@ -506,7 +509,7 @@ void getColourFromMemory(void)
 void saveColourToMemory(void)
 {
   Serial.println("Saving RGB value");
-  for (int addr = 0; addr < 3; addr++)
+  for (int addr = MEM_RED; addr <= BLUE; addr++)
   {
     writeEEPROM(addr, target_colour[addr]);
     
