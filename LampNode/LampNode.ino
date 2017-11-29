@@ -51,9 +51,12 @@
 #define MEM_MODE        3
 #define MEM_TRANSITION  4
 
+#define WIDTH    10
+#define HEIGHT   6
 
 /* Physical connections */
-#define BUTTON D3               //button on pin D3
+#define BUTTON  D1               //button on pin D1
+#define AIN     A0
 
 /* Timers */
 #define INPUT_READ_TIMEOUT 50   //check for button pressed every 50ms
@@ -79,6 +82,9 @@ bool pulse_animation = false;
 bool pulse_direction = 1;
 int pulse_addr = 0;
 
+bool active = false;
+bool lastActive = false;
+
 const uint16_t PixelCount = 60; // this example assumes 3 pixels, making it smaller will cause a failure
 const uint8_t PixelPin = 14;  // make sure to set this to the correct pin, ignored for Esp8266
 
@@ -92,6 +98,19 @@ enum Transitions {FADE, INSTANT};  // The way in which the lamp animates between
 
 enum Modes Mode;
 enum Transitions Transition;
+
+uint8_t x, 
+        y = 0;
+
+uint8_t LEDindex[HEIGHT][WIDTH] =  
+{
+  { 0,  1,  2,  3,  4,  5,  6,  7,  8,  9},
+  {10, 11, 12, 13, 14, 15, 16, 17, 18, 19},
+  {20, 21, 22, 23, 24, 25, 26, 27, 28, 29},
+  {30, 31, 32, 33, 34, 35, 36, 37, 38, 39},
+  {40, 41, 42, 43, 44, 45, 46, 47, 48, 49},
+  {50, 51, 52, 53, 54, 55, 56, 57, 58, 59}
+};
 
 NeoPixelBrightnessBus<NeoRgbFeature, Neo800KbpsMethod> strip(PixelCount, PixelPin);
 
@@ -109,11 +128,6 @@ void setup()
   delay(200);
   Serial.swap();
   
-  /* Setup WiFi and MQTT */ 
-  setup_wifi();
-  client.setServer(MQTTserver, MQTTport);
-  client.setCallback(callback);
-  
   /* Start timers */
   setTimer(&readInputTimer);
   setTimer(&ledTimer);
@@ -128,8 +142,14 @@ void setup()
   /* Set LED state */
   strip.Begin();
   strip.Show();
+  
+  /* Setup WiFi and MQTT */ 
+  setup_wifi();
+  client.setServer(MQTTserver, MQTTport);
+  client.setCallback(callback);
 }
 
+int cnt = 0;
 void loop() 
 {
   /* Check WiFi Connection */
@@ -143,7 +163,13 @@ void loop()
   switch (Mode)
   {
     case OFF:
-      
+      if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
+      {
+        setTimer(&ledTimer); // reset timer
+        Wheel(cnt++);
+        if (cnt>=256)
+          cnt=0;
+      }
     break;
 
     case NORMAL:
@@ -164,8 +190,30 @@ void loop()
       if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
       {
         setTimer(&ledTimer); // reset timer
-        fadeToColourTarget();
-        //music2Brightness();
+        int reading = analogRead(AIN);
+        Serial.println(reading);
+
+        lastActive = active;
+        
+        if (reading > 7)
+          active = true;
+        else
+          active = false;
+
+        if (active && !lastActive)
+        {
+          Serial.println("ON");
+          applyColour(255,0,0);
+        }
+        else if (!active && lastActive)
+        {
+          Serial.println("OFF");
+          applyColour(0,0,0);
+        }
+          
+        
+        //fadeToColourTarget();
+
       }
 
     break;
@@ -223,7 +271,7 @@ void setup_wifi()
 
   while (WiFi.status() != WL_CONNECTED) 
   {
-    delay(500);
+    connectingAnimation();
     Serial.print(".");
   }
 
@@ -362,7 +410,7 @@ void readInputs(void)
 {
   static bool button_state, last_button_state = false; // Remembers the current and previous button states
   
-  button_state = !digitalRead(BUTTON); // read button state (active high)
+  button_state = digitalRead(BUTTON); // read button state (active high)
   
   if (button_state && !last_button_state) // on a rising edge we register a button press
     button_pressed = true;
@@ -530,12 +578,13 @@ void setColourTransition(void)
     {
       transition[addr][i] = map(addr, 0, 49, current_colour[i], target_colour[i]); // compute the proportional colour value
     }
+    /*
     Serial.print(transition[addr][0]);
     Serial.print(",");
     Serial.print(transition[addr][1]);
     Serial.print(",");
     Serial.println(transition[addr][2]);
-    
+    */
   }
 }
 
@@ -547,26 +596,19 @@ void generatePulse(void)
     {
       pulse[addr][i] = map(addr, 0, 29, current_colour[i], current_colour[i]/5); // compute the proportional colour value
     }
+    /*
     Serial.print(pulse[addr][0]);
     Serial.print(",");
     Serial.print(pulse[addr][1]);
     Serial.print(",");
     Serial.println(pulse[addr][2]);
-    
+    */
   }
 }
 
 void pulseEffect(void)
 {
   setColour(pulse[pulse_addr][0],pulse[pulse_addr][1],pulse[pulse_addr][2]);
-
-    Serial.print(pulse[pulse_addr][0]);
-    Serial.print(",");
-    Serial.print(pulse[pulse_addr][1]);
-    Serial.print(",");
-    Serial.print(pulse[pulse_addr][2]);
-    Serial.print("---");
-    Serial.println(pulse_addr);
 
   if (pulse_addr>=29)
     pulse_direction = 0;
@@ -579,3 +621,34 @@ void pulseEffect(void)
     pulse_addr--;
 }
 
+void connectingAnimation(void)
+{
+  static int count = -4;
+  RgbColor colour(10,10,10);
+  RgbColor off(0,0,0);
+  for (int i=0; i<5; i++)
+    strip.SetPixelColor(count+i, colour);
+  strip.SetPixelColor(count-1, off);
+  strip.Show();
+  if(count>60)
+    count = 0;
+  else
+    count++;
+  delay(30);
+}
+
+
+// Input a value 0 to 255 to get a color value.
+// The colours are a transition r - g - b - back to r.
+uint32_t Wheel(byte WheelPos) {
+  WheelPos = 255 - WheelPos;
+  if(WheelPos < 85) {
+   setColour(255 - WheelPos * 3, 0, WheelPos * 3);
+  } else if(WheelPos < 170) {
+    WheelPos -= 85;
+   setColour(0, WheelPos * 3, 255 - WheelPos * 3);
+  } else {
+   WheelPos -= 170;
+   setColour(WheelPos * 3, 255 - WheelPos * 3, 0);
+  }
+}
