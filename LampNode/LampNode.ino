@@ -93,7 +93,7 @@ unsigned int current_colour[3] = {0,0,0};  // rgb value which we aim to set the 
 unsigned int transition[50][3];
 unsigned int pulse[30][3];
  
-enum Modes {OFF, NORMAL, PARTY};   // various modes of operation
+enum Modes {OFF, NORMAL, PARTY, RAINBOW, CYCLE};   // various modes of operation
 enum Transitions {FADE, INSTANT};  // The way in which the lamp animates between colours
 
 enum Modes Mode;
@@ -163,13 +163,7 @@ void loop()
   switch (Mode)
   {
     case OFF:
-      if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
-      {
-        setTimer(&ledTimer); // reset timer
-        Wheel(cnt++);
-        if (cnt>=256)
-          cnt=0;
-      }
+
     break;
 
     case NORMAL:
@@ -216,6 +210,26 @@ void loop()
 
       }
 
+    break;
+
+    case RAINBOW:
+      if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
+      {
+        setTimer(&ledTimer); // reset timer
+        rainbow();
+      }
+    break;
+
+    case CYCLE:
+      if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
+      {
+        setTimer(&ledTimer); // reset timer
+        int r, g, b;
+        Wheel(cnt++, &r, &g, &b);
+        setColour(r,g,b);
+        if (cnt>=256)
+          cnt=0;
+      }
     break;
 
     default:
@@ -337,6 +351,16 @@ void callback(char* topic, byte* payload, unsigned int length)
     {
       Mode = PARTY;
       Serial.println("PARTY");
+    }
+    if(strcmp(input,"Rainbow")==0)
+    {
+      Mode = RAINBOW;
+      Serial.println("RAINBOW");
+    }
+    if(strcmp(input,"Cycle")==0)
+    {
+      Mode = CYCLE;
+      Serial.println("CYCLE");
     }
     // save to eeprom
      writeEEPROM(MEM_MODE, Mode);
@@ -640,15 +664,49 @@ void connectingAnimation(void)
 
 // Input a value 0 to 255 to get a color value.
 // The colours are a transition r - g - b - back to r.
-uint32_t Wheel(byte WheelPos) {
+void Wheel(byte WheelPos, int *r, int *g, int *b) 
+{
   WheelPos = 255 - WheelPos;
-  if(WheelPos < 85) {
-   setColour(255 - WheelPos * 3, 0, WheelPos * 3);
-  } else if(WheelPos < 170) {
+  if(WheelPos < 85) 
+  {
+   *r = 255 - WheelPos * 3;
+   *b = 0;
+   *g = WheelPos * 3;
+  } 
+  else if(WheelPos < 170) 
+  {
     WheelPos -= 85;
-   setColour(0, WheelPos * 3, 255 - WheelPos * 3);
-  } else {
+   *r = 0;
+   *g = WheelPos * 3;
+   *b = 255 - WheelPos * 3;
+  } 
+  else 
+  {
    WheelPos -= 170;
-   setColour(WheelPos * 3, 255 - WheelPos * 3, 0);
+   *r = WheelPos * 3;
+   *g = 255 - WheelPos * 3;
+   *b = 0;
   }
 }
+
+void rainbow(void)
+{
+  // here we need to cycle through each led, assigning consectuve colours pulled from the Wheel function. Each time this is called all colours should shift one
+  static int offset = 0;
+  static int stepVal = 256/PixelCount;
+  int red, green, blue;  
+  
+  for (int i=0; i<PixelCount; i++)
+  {
+    Wheel(i*stepVal+offset, &red, &green, &blue); // get our colour
+    RgbColor colour(green,red,blue);
+    strip.SetPixelColor(i, colour);
+  }
+  strip.Show();
+  
+  if (offset >= 255)
+    offset = 0;
+  else
+    offset++;
+}
+
