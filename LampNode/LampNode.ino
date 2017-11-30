@@ -670,8 +670,8 @@ void Wheel(byte WheelPos, int *r, int *g, int *b)
   if(WheelPos < 85) 
   {
    *r = 255 - WheelPos * 3;
-   *b = 0;
-   *g = WheelPos * 3;
+   *g = 0;
+   *b = WheelPos * 3;
   } 
   else if(WheelPos < 170) 
   {
