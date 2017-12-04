@@ -145,7 +145,7 @@ void setup()
   EEPROM.begin(512);
   getColourFromMemory();
   setColourTarget(target_colour[0],target_colour[1],target_colour[2]);
-  Mode = (Modes)readEEPROM(MEM_MODE);
+  setMode(readEEPROM(MEM_MODE));
   Transition = (Transitions)readEEPROM(MEM_TRANSITION);
 
   /* Set LED state */
@@ -354,38 +354,34 @@ void callback(char* topic, byte* payload, unsigned int length)
     
     if(strcmp(input,"Off")==0)
     {
-      Mode = OFF;
+      setMode(OFF);
       Serial.println("OFF");
-      setColour(0,0,0);
     }
     if(strcmp(input,"Normal")==0)
     {
-      Mode = NORMAL;
+      setMode(NORMAL);
       Serial.println("NORMAL");
-      setColourTarget(target_colour[0],target_colour[1],target_colour[2]); 
     }
     if(strcmp(input,"Party")==0)
     {
-      Mode = PARTY;
+      setMode(PARTY);
       Serial.println("PARTY");
     }
     if(strcmp(input,"Twinkle")==0)
     {
-      Mode = TWINKLE;
+      setMode(TWINKLE);
       Serial.println("TWINKLE");
     }
     if(strcmp(input,"Rainbow")==0)
     {
-      Mode = RAINBOW;
+      setMode(RAINBOW);
       Serial.println("RAINBOW");
     }
     if(strcmp(input,"Cycle")==0)
     {
-      Mode = CYCLE;
+      setMode(CYCLE);
       Serial.println("CYCLE");
     }
-    // save to eeprom
-     writeEEPROM(MEM_MODE, Mode);
   }
   
   if (strcmp(topic,"/LampNode/Transition")==0)
@@ -759,5 +755,31 @@ void twinkle(int val)
     strip.SetPixelColor(pix, off);
 
   strip.Show();
+}
+
+
+void setMode(Modes temp)
+{
+  switch(temp)
+  {
+    case NORMAL:
+      setColourTarget(target_colour[0],target_colour[1],target_colour[2]); 
+    break;
+    
+    case OFF:
+    case PARTY:
+    case TWINKLE:    
+    case RAINBOW: 
+    case CYCLE:
+      setColour(0,0,0);
+    break;
+    
+    default:
+      // should never get here
+    break;
+  }
+  
+  Mode = temp
+  writeEEPROM(MEM_MODE, Mode);
 }
 
