@@ -59,15 +59,21 @@
 #define AIN     A0
 
 /* Timers */
-#define INPUT_READ_TIMEOUT 50   //check for button pressed every 50ms
-#define LED_UPDATE_TIMEOUT 20   // update led every 20ms
+#define INPUT_READ_TIMEOUT     50   //check for button pressed every 50ms
+#define LED_UPDATE_TIMEOUT     20   // update led every 20ms
+#define RAINBOW_UPDATE_TIMEOUT 30
+#define CYCLE_UPDATE_TIMEOUT   40
+#define TWINKLE_UPDATE_TIMEOUT 50
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-unsigned long runTime,
-              ledTimer, 
-              readInputTimer = 0;
+unsigned long runTime         = 0,
+              ledTimer        = 0,
+              twinkleTimer    = 0, 
+              rainbowTimer    = 0,
+              cycleTimer      = 0,
+              readInputTimer  = 0;
 
 long buttonTime = 0;
 long lastPushed = 0; // stores the time when button was last depressed
@@ -93,7 +99,7 @@ unsigned int current_colour[3] = {0,0,0};  // rgb value which we aim to set the 
 unsigned int transition[50][3];
 unsigned int pulse[30][3];
  
-enum Modes {OFF, NORMAL, PARTY, RAINBOW, CYCLE};   // various modes of operation
+enum Modes {OFF, NORMAL, PARTY, TWINKLE, RAINBOW, CYCLE};   // various modes of operation
 enum Transitions {FADE, INSTANT};  // The way in which the lamp animates between colours
 
 enum Modes Mode;
@@ -131,6 +137,9 @@ void setup()
   /* Start timers */
   setTimer(&readInputTimer);
   setTimer(&ledTimer);
+  setTimer(&twinkleTimer);
+  setTimer(&rainbowTimer);
+  setTimer(&cycleTimer);
 
   /* Initialise EEPROM */
   EEPROM.begin(512);
@@ -212,18 +221,26 @@ void loop()
 
     break;
 
-    case RAINBOW:
-      if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
+    case TWINKLE:
+      if(timerExpired(twinkleTimer, TWINKLE_UPDATE_TIMEOUT))
       {
-        setTimer(&ledTimer); // reset timer
+        setTimer(&twinkleTimer); // reset timer
+        twinkle(220);
+      }
+    break;
+
+    case RAINBOW:
+      if(timerExpired(rainbowTimer, RAINBOW_UPDATE_TIMEOUT))
+      {
+        setTimer(&rainbowTimer); // reset timer
         rainbow();
       }
     break;
 
     case CYCLE:
-      if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
+      if(timerExpired(cycleTimer, CYCLE_UPDATE_TIMEOUT))
       {
-        setTimer(&ledTimer); // reset timer
+        setTimer(&cycleTimer); // reset timer
         int r, g, b;
         Wheel(cnt++, &r, &g, &b);
         setColour(r,g,b);
@@ -351,6 +368,11 @@ void callback(char* topic, byte* payload, unsigned int length)
     {
       Mode = PARTY;
       Serial.println("PARTY");
+    }
+    if(strcmp(input,"Twinkle")==0)
+    {
+      Mode = TWINKLE;
+      Serial.println("TWINKLE");
     }
     if(strcmp(input,"Rainbow")==0)
     {
@@ -693,7 +715,7 @@ void rainbow(void)
 {
   // here we need to cycle through each led, assigning consectuve colours pulled from the Wheel function. Each time this is called all colours should shift one
   static int offset = 0;
-  static int stepVal = 256/PixelCount;
+  static int stepVal = 256/PixelCount;  // note the 256 value can be reduced to show less of the colour spectrum at once.
   int red, green, blue;  
   
   for (int i=0; i<PixelCount; i++)
@@ -708,5 +730,34 @@ void rainbow(void)
     offset = 0;
   else
     offset++;
+}
+
+bool coinFlip(void)
+{
+  int coin = random(2) - 1;
+  if (coin)
+    return true;
+  else
+    return false;
+}
+
+void twinkle(int val)
+{
+  // here we need to cycle through each led, assigning consectuve colours pulled from the Wheel function. Each time this is called all colours should shift one
+  int red, green, blue;  
+  int offset = random(30) - 15;
+  int pix = random(60);
+  int state = coinFlip();
+  
+  Wheel(val+offset, &red, &green, &blue); // get our colour
+  RgbColor colour(green,red,blue);
+  RgbColor off(0,0,0);
+  
+  if(state)
+    strip.SetPixelColor(pix, colour);
+  else
+    strip.SetPixelColor(pix, off);
+
+  strip.Show();
 }
 
