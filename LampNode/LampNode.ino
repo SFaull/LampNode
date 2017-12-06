@@ -55,8 +55,8 @@
 #define HEIGHT   6
 
 /* Physical connections */
-#define BUTTON  D1               //button on pin D1
-#define AIN     A0
+#define BUTTON        D1               //button on pin D1
+#define AIN           A0
 
 /* Timers */
 #define INPUT_READ_TIMEOUT     50   //check for button pressed every 50ms
@@ -123,8 +123,9 @@ NeoPixelBrightnessBus<NeoRgbFeature, Neo800KbpsMethod> strip(PixelCount, PixelPi
 void setup() 
 {
   /* Setup I/O */
-  pinMode(BUILTIN_LED, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
+  pinMode(LED_BUILTIN, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
   pinMode(BUTTON, INPUT_PULLUP);  // Enables the internal pull-up resistor
+  digitalWrite(LED_BUILTIN, HIGH); 
   
   /* Setup serial */
   Serial.begin(115200);
@@ -145,7 +146,7 @@ void setup()
   EEPROM.begin(512);
   getColourFromMemory();
   setColourTarget(target_colour[0],target_colour[1],target_colour[2]);
-  setMode(readEEPROM(MEM_MODE));
+  setMode((Modes)readEEPROM(MEM_MODE));
   Transition = (Transitions)readEEPROM(MEM_TRANSITION);
 
   /* Set LED state */
@@ -779,7 +780,7 @@ void setMode(Modes temp)
     break;
   }
   
-  Mode = temp
+  Mode = temp;
   writeEEPROM(MEM_MODE, Mode);
 }
 
