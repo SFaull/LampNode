@@ -119,7 +119,7 @@ void setup()
   EEPROM.begin(512);
   getColourFromMemory();
   setColourTarget(target_colour[0],target_colour[1],target_colour[2]);
-  setMode((Modes)readEEPROM(MEM_MODE));
+  setTheMode((Modes)readEEPROM(MEM_MODE));
   Transition = (Transitions)readEEPROM(MEM_TRANSITION);
 
   /* Set LED state */
@@ -172,7 +172,7 @@ void loop()
 
         lastActive = active;
         
-        if (reading > 7)
+        if (reading > 10)
           active = true;
         else
           active = false;
@@ -241,36 +241,36 @@ void loop()
     {
       //start conting
       lastPushed = now; // start the timer 
-      Serial.print("Button pushed... ");
+      Serial.println("Button pushed... ");
       button_pressed = false;
     }
 
     if (((now - lastPushed) > 1000) && button_short_press) //check the hold time
     {
-      Serial.print("Button held...");
-      client.publish("/LampNode/Comms", "Press");
-      button_short_press = false
+      Serial.println("Button held...");
+      if (Mode != OFF)
+        client.publish("/LampNode/Comms", "Press");
+      button_short_press = false;
     }
     
     if (button_released)
     {
-      Serial.println("Button released.");
-
       //get the time that button was held in
       //buttonTime = now - lastPushed;
 
       if (button_short_press)  // for a short press we turn the device on/off
       {
+        Serial.println("Button released (short press).");
         if (Mode == OFF)
-          setMode(NORMAL);
+          setTheMode((Modes)NORMAL);
         else
-          setMode(OFF);
-
-        button_short_press = false;
+          setTheMode((Modes)OFF);
       }
       else  // for a long press we do the animation thing
       {
-        client.publish("/LampNode/Comms", "Release");
+        Serial.println("Button released (long press).");
+        if (Mode != OFF)  // lets only do the pulsey animation if the lamp is on in the first place
+          client.publish("/LampNode/Comms", "Release");
       }
 
       //snprintf (msg, 75, "hello world #%ld", buttonTime);
@@ -278,6 +278,7 @@ void loop()
       //Serial.println(msg);
       //client.publish("/test/outTopic", msg);
       button_released = false;
+      button_short_press = false;
     }
   }
 }
@@ -347,32 +348,32 @@ void callback(char* topic, byte* payload, unsigned int length)
     
     if(strcmp(input,"Off")==0)
     {
-      setMode(OFF);
+      setTheMode(OFF);
       Serial.println("OFF");
     }
     if(strcmp(input,"Normal")==0)
     {
-      setMode(NORMAL);
+      setTheMode(NORMAL);
       Serial.println("NORMAL");
     }
     if(strcmp(input,"Party")==0)
     {
-      setMode(PARTY);
+      setTheMode(PARTY);
       Serial.println("PARTY");
     }
     if(strcmp(input,"Twinkle")==0)
     {
-      setMode(TWINKLE);
+      setTheMode(TWINKLE);
       Serial.println("TWINKLE");
     }
     if(strcmp(input,"Rainbow")==0)
     {
-      setMode(RAINBOW);
+      setTheMode(RAINBOW);
       Serial.println("RAINBOW");
     }
     if(strcmp(input,"Cycle")==0)
     {
-      setMode(CYCLE);
+      setTheMode(CYCLE);
       Serial.println("CYCLE");
     }
   }
@@ -461,18 +462,19 @@ void readInputs(void)
 
 void fadeToColourTarget(void)
 {
-    static int addr = 0;
-    if(!target_met)
+  static int addr = 0;
+    
+  if(!target_met)
+  {
+    setColour(transition[addr][0],transition[addr][1],transition[addr][2]);
+    addr++;
+    
+    if (addr>=50)
     {
-      setColour(transition[addr][0],transition[addr][1],transition[addr][2]);
-      addr++;
-      
-      if (addr>=50)
-      {
-        target_met = true;
-        addr = 0;
-      }      
-    }
+      target_met = true;
+      addr = 0;
+    }      
+  }
 }
 
 void applyColour(uint8_t r, uint8_t g, uint8_t b)
@@ -485,6 +487,12 @@ void applyColour(uint8_t r, uint8_t g, uint8_t b)
       strip.SetPixelColor(i, colour);
     }
     strip.Show();
+    Serial.print("Whole strip set to ");
+    Serial.print(r);
+    Serial.print(",");
+    Serial.print(g);
+    Serial.print(",");
+    Serial.println(b);
   }
   else
     Serial.println("Invalid RGB value, colour not set");
@@ -599,11 +607,12 @@ void setColourTarget(int r, int g, int b)
   target_colour[1] = g;
   target_colour[2] = b;
 
+/*
   if (Transition != FADE) // if not fading, set colour to target immediately
   {
     setColour(r,g,b);
   }
-
+*/
   saveColourToMemory();
   setColourTransition();
 }
@@ -754,8 +763,10 @@ void twinkle(int val)
 }
 
 
-void setMode(Modes temp)
+void setTheMode(Modes temp)
 {
+  Serial.print("mode set to: ");
+  Serial.println(temp);
   switch(temp)
   {
     case NORMAL:
@@ -763,9 +774,21 @@ void setMode(Modes temp)
     break;
     
     case OFF:
+      setColour(0,0,0);
+    break;
+    
     case PARTY:
-    case TWINKLE:    
-    case RAINBOW: 
+      setColour(0,0,0);
+    break;
+    
+    case TWINKLE:
+      setColour(0,0,0);
+    break;   
+     
+    case RAINBOW:
+      setColour(0,0,0);
+    break; 
+    
     case CYCLE:
       setColour(0,0,0);
     break;
