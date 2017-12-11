@@ -63,6 +63,7 @@ bool target_met = false;
 bool pulse_animation = false;
 bool pulse_direction = 1;
 int pulse_addr = 0;
+int brightness = 155;
 
 bool active = false;
 bool lastActive = false;
@@ -75,8 +76,9 @@ unsigned int current_colour[3] = {0,0,0};  // rgb value which we aim to set the 
 unsigned int transition[50][3];
 unsigned int pulse[30][3];
  
-enum Modes {OFF, NORMAL, PARTY, TWINKLE, RAINBOW, CYCLE};   // various modes of operation
+enum Modes {OFF, COLOUR, TWINKLE, RAINBOW, CYCLE};   // various modes of operation
 enum Transitions {FADE, INSTANT};  // The way in which the lamp animates between colours
+bool standby = false;
 
 enum Modes Mode;
 enum Transitions Transition;
@@ -149,7 +151,7 @@ void loop()
 
     break;
 
-    case NORMAL:
+    case COLOUR:
       /* Periodically update the LEDs */
       if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
       {
@@ -158,39 +160,6 @@ void loop()
           pulseEffect();
         else
         fadeToColourTarget();
-      }
-
-    break;
-
-    case PARTY:
-      /* Periodically update the LEDs */
-      if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
-      {
-        setTimer(&ledTimer); // reset timer
-        int reading = analogRead(AIN);
-        Serial.println(reading);
-
-        lastActive = active;
-        
-        if (reading > 10)
-          active = true;
-        else
-          active = false;
-
-        if (active && !lastActive)
-        {
-          Serial.println("ON");
-          applyColour(255,0,0);
-        }
-        else if (!active && lastActive)
-        {
-          Serial.println("OFF");
-          applyColour(0,0,0);
-        }
-          
-        
-        //fadeToColourTarget();
-
       }
 
     break;
@@ -249,7 +218,7 @@ void loop()
     {
       Serial.println("Button held...");
       if (Mode != OFF)
-        client.publish("/LampNode/Comms", "Press");
+        client.publish("LampNode/Comms", "Press");
       button_short_press = false;
     }
     
@@ -262,7 +231,7 @@ void loop()
       {
         Serial.println("Button released (short press).");
         if (Mode == OFF)
-          setTheMode((Modes)NORMAL);
+          setTheMode((Modes)COLOUR);
         else
           setTheMode((Modes)OFF);
       }
@@ -270,13 +239,8 @@ void loop()
       {
         Serial.println("Button released (long press).");
         if (Mode != OFF)  // lets only do the pulsey animation if the lamp is on in the first place
-          client.publish("/LampNode/Comms", "Release");
+          client.publish("LampNode/Comms", "Release");
       }
-
-      //snprintf (msg, 75, "hello world #%ld", buttonTime);
-      //Serial.print("Publish message: ");
-      //Serial.println(msg);
-      //client.publish("/test/outTopic", msg);
       button_released = false;
       button_short_press = false;
     }
@@ -322,7 +286,7 @@ void callback(char* topic, byte* payload, unsigned int length)
   
   Serial.println(input);
   
-  if (strcmp(topic,"/LampNode/Colour")==0)
+  if (strcmp(topic,"LampNode01/Colour")==0)
   {  
     /* ----- Split message by separator character and store rgb values ---- */
     char * command;
@@ -361,24 +325,14 @@ void callback(char* topic, byte* payload, unsigned int length)
     setColourTarget(temp[0],temp[1],temp[2]);
   } 
   
-  if (strcmp(topic,"/LampNode/Mode")==0)
+  if (strcmp(topic,"LampNode01/Mode")==0)
   {    
     Serial.print("Mode set to: ");
-    
-    if(strcmp(input,"Off")==0)
+   
+    if(strcmp(input,"Colour")==0)
     {
-      setTheMode(OFF);
-      Serial.println("OFF");
-    }
-    if(strcmp(input,"Normal")==0)
-    {
-      setTheMode(NORMAL);
-      Serial.println("NORMAL");
-    }
-    if(strcmp(input,"Party")==0)
-    {
-      setTheMode(PARTY);
-      Serial.println("PARTY");
+      setTheMode(COLOUR);
+      Serial.println("COLOUR");
     }
     if(strcmp(input,"Twinkle")==0)
     {
@@ -397,7 +351,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     }
   }
   
-  if (strcmp(topic,"/LampNode/Transition")==0)
+  if (strcmp(topic,"LampNode01/Transition")==0)
   {        
     if(strcmp(input,"Fade")==0)
     {
@@ -413,7 +367,7 @@ void callback(char* topic, byte* payload, unsigned int length)
      writeEEPROM(MEM_TRANSITION, Transition);
   }
 
-  if (strcmp(topic,"/LampNode/Comms")==0)
+  if (strcmp(topic,"LampNode/Comms")==0)
   {               
     if(strcmp(input,"Press")==0)
     {
@@ -431,6 +385,34 @@ void callback(char* topic, byte* payload, unsigned int length)
       Serial.println("Release");
     }
   }
+  if (strcmp(topic,"LampNode01/Announcements")==0)
+  {  
+    // We should broadcast our settings for the app to populate its parameters
+  }
+  if (strcmp(topic,"LampNode01/Power")==0)
+  {  
+    if(strcmp(input,"On")==0)
+    {
+      setTheMode(COLOUR);
+      Serial.println("ON");
+    }
+    if(strcmp(input,"Off")==0)
+    {
+      setTheMode(OFF);
+      Serial.println("OFF");
+    }
+  }
+  if (strcmp(topic,"LampNode01/Brightness")==0)
+  {  
+    int brightness_temp = atoi(input);
+    brightness_temp*=255; // multiply by range
+    brightness_temp/=100;  // divide by 100
+    Serial.print("Brightness: ");
+    Serial.print(brightness_temp);
+    if (brightness_temp >= 0 || brightness_temp < 256)
+      brightness = brightness_temp;
+    applyColour(target_colour[0],target_colour[1],target_colour[2]);
+  }
 }
 
 void reconnect() {
@@ -443,12 +425,14 @@ void reconnect() {
     {
       Serial.println("Connected");
       // Once connected, publish an announcement...
-      client.publish("/LampNode/Comms", "LampNode01 connected");  // potentially not necessary
+      //client.publish("/LampNode/Announcements", "LampNode01 connected");  // potentially not necessary
       // ... and resubscribe
-      client.subscribe("/LampNode/Colour");
-      client.subscribe("/LampNode/Comms");
-      client.subscribe("/LampNode/Mode");
-      client.subscribe("/LampNode/Transition");
+      client.subscribe("LampNode01/Colour"); // listen for an rgb or hex colour value
+      client.subscribe("LampNode/Comms");  // listen for touch events (community topic)
+      client.subscribe("LampNode01/Mode");   // listen for mode of operation
+      client.subscribe("LampNode01/Power");  // listen for on/off status
+      client.subscribe("LampNode01/Brightness");  // listen for brightness value
+      client.subscribe("LampNode01/Announcements");  // listen for announcements from controllers
     } 
     else 
     {
@@ -505,6 +489,7 @@ void applyColour(uint8_t r, uint8_t g, uint8_t b)
     {
       strip.SetPixelColor(i, colour);
     }
+    strip.SetBrightness(brightness);
     strip.Show();
     Serial.print("Whole strip set to ");
     Serial.print(r);
@@ -695,6 +680,7 @@ void connectingAnimation(void)
   for (int i=0; i<5; i++)
     strip.SetPixelColor(count+i, colour);
   strip.SetPixelColor(count-1, off);
+  strip.SetBrightness(brightness);
   strip.Show();
   if(count>60)
     count = 0;
@@ -744,6 +730,7 @@ void rainbow(void)
     RgbColor colour(green,red,blue);
     strip.SetPixelColor(i, colour);
   }
+  strip.SetBrightness(brightness);
   strip.Show();
   
   if (offset >= 255)
@@ -778,6 +765,7 @@ void twinkle(int val)
   else
     strip.SetPixelColor(pix, off);
 
+  strip.SetBrightness(brightness);
   strip.Show();
 }
 
@@ -788,15 +776,11 @@ void setTheMode(Modes temp)
   Serial.println(temp);
   switch(temp)
   {
-    case NORMAL:
+    case COLOUR:
       setColourTarget(target_colour[0],target_colour[1],target_colour[2]); 
     break;
     
     case OFF:
-      setColour(0,0,0);
-    break;
-    
-    case PARTY:
       setColour(0,0,0);
     break;
     
