@@ -329,14 +329,33 @@ void callback(char* topic, byte* payload, unsigned int length)
     int index = 0;
     int temp[3];
     Serial.print("rgb(");
-    command = strtok (input," (,)");  // this is the first part of the string (rgb) - ignore this
-    while (index<3)
+
+    if (input[0] == '#')  // we have received a hex code of format #FFFFFF
     {
-      command = strtok (NULL, " (,)");
-      temp[index] = atoi(command);
-      Serial.print(temp[index]);
+      memmove(input, input+1, strlen(input)); // chop the first character off of the string (removes the #)
+      unsigned long rgb = strtoul (input, NULL, 16);  // convert string to actual hex value 
+      
+      temp[0] = rgb >> 16;
+      temp[1] = (rgb & 0x00ff00) >> 8;
+      temp[2] = (rgb & 0x0000ff);
+      
+      Serial.print(temp[0]);
       Serial.print(", ");
-      index++;
+      Serial.print(temp[1]);
+      Serial.print(", ");
+      Serial.print(temp[2]); 
+    }
+    else  // we have received an rgb val of format rgb(255,255,255)
+    {
+      command = strtok (input," (,)");  // this is the first part of the string (rgb) - ignore this
+      while (index<3)
+      {
+        command = strtok (NULL, " (,)");
+        temp[index] = atoi(command);
+        Serial.print(temp[index]);
+        Serial.print(", ");
+        index++;
+      }
     }
     Serial.println(")");
     setColourTarget(temp[0],temp[1],temp[2]);
