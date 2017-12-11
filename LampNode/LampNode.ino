@@ -24,7 +24,8 @@
 #define MEM_GREEN       1
 #define MEM_BLUE        2
 #define MEM_MODE        3
-#define MEM_TRANSITION  4
+#define MEM_STANDBY     4
+#define MEM_BRIGHTNESS  5
 
 #define WIDTH    10
 #define HEIGHT   6
@@ -76,12 +77,10 @@ unsigned int current_colour[3] = {0,0,0};  // rgb value which we aim to set the 
 unsigned int transition[50][3];
 unsigned int pulse[30][3];
  
-enum Modes {OFF, COLOUR, TWINKLE, RAINBOW, CYCLE};   // various modes of operation
-enum Transitions {FADE, INSTANT};  // The way in which the lamp animates between colours
+enum Modes {COLOUR, TWINKLE, RAINBOW, CYCLE};   // various modes of operation
 bool standby = false;
 
 enum Modes Mode;
-enum Transitions Transition;
 
 uint8_t LEDindex[HEIGHT][WIDTH] =  
 {
@@ -122,7 +121,8 @@ void setup()
   getColourFromMemory();
   setColourTarget(target_colour[0],target_colour[1],target_colour[2]);
   setTheMode((Modes)readEEPROM(MEM_MODE));
-  Transition = (Transitions)readEEPROM(MEM_TRANSITION);
+  setStandby(readEEPROM(MEM_STANDBY));
+  brightness = readEEPROM(MEM_BRIGHTNESS);
 
   /* Set LED state */
   strip.Begin();
@@ -144,60 +144,61 @@ void loop()
   
   unsigned long now = millis();  // get elapsed time
 
-
-  switch (Mode)
+  if (!standby)
   {
-    case OFF:
-
-    break;
-
-    case COLOUR:
-      /* Periodically update the LEDs */
-      if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
-      {
-        setTimer(&ledTimer); // reset timer
-        if(pulse_animation)
-          pulseEffect();
-        else
-        fadeToColourTarget();
-      }
-
-    break;
-
-    case TWINKLE:
-      if(timerExpired(twinkleTimer, TWINKLE_UPDATE_TIMEOUT))
-      {
-        setTimer(&twinkleTimer); // reset timer
-        twinkle(220);
-      }
-    break;
-
-    case RAINBOW:
-      if(timerExpired(rainbowTimer, RAINBOW_UPDATE_TIMEOUT))
-      {
-        setTimer(&rainbowTimer); // reset timer
-        rainbow();
-      }
-    break;
-
-    case CYCLE:
-      if(timerExpired(cycleTimer, CYCLE_UPDATE_TIMEOUT))
-      {
-        setTimer(&cycleTimer); // reset timer
-        int r, g, b;
-        Wheel(cnt++, &r, &g, &b);
-        setColour(r,g,b);
-        if (cnt>=256)
-          cnt=0;
-      }
-    break;
-
-    default:
-      // unknown state - do nothing
-    break;
-  }
+    switch (Mode)
+    {  
+      case COLOUR:
+        /* Periodically update the LEDs */
+        if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
+        {
+          setTimer(&ledTimer); // reset timer
+          if(pulse_animation)
+            pulseEffect();
+          else
+          fadeToColourTarget();
+        }
   
-
+      break;
+  
+      case TWINKLE:
+        if(timerExpired(twinkleTimer, TWINKLE_UPDATE_TIMEOUT))
+        {
+          setTimer(&twinkleTimer); // reset timer
+          twinkle(220);
+        }
+      break;
+  
+      case RAINBOW:
+        if(timerExpired(rainbowTimer, RAINBOW_UPDATE_TIMEOUT))
+        {
+          setTimer(&rainbowTimer); // reset timer
+          rainbow();
+        }
+      break;
+  
+      case CYCLE:
+        if(timerExpired(cycleTimer, CYCLE_UPDATE_TIMEOUT))
+        {
+          setTimer(&cycleTimer); // reset timer
+          int r, g, b;
+          Wheel(cnt++, &r, &g, &b);
+          setColour(r,g,b);
+          if (cnt>=256)
+            cnt=0;
+        }
+      break;
+  
+      default:
+        // unknown state - do nothing
+      break;
+    }
+  }
+  else
+  {
+    // do nothing if off
+    //applyColour(0,0,0);
+  }
 
   /* Periodically read the inputs */
   if (timerExpired(readInputTimer, INPUT_READ_TIMEOUT)) // check for button press periodically
@@ -217,7 +218,7 @@ void loop()
     if (((now - lastPushed) > 1000) && button_short_press) //check the hold time
     {
       Serial.println("Button held...");
-      if (Mode != OFF)
+      if (!standby)
         client.publish("LampNode/Comms", "Press");
       button_short_press = false;
     }
@@ -230,15 +231,12 @@ void loop()
       if (button_short_press)  // for a short press we turn the device on/off
       {
         Serial.println("Button released (short press).");
-        if (Mode == OFF)
-          setTheMode((Modes)COLOUR);
-        else
-          setTheMode((Modes)OFF);
+        setStandby(!standby);  // change the standby state
       }
       else  // for a long press we do the animation thing
       {
         Serial.println("Button released (long press).");
-        if (Mode != OFF)  // lets only do the pulsey animation if the lamp is on in the first place
+        if (!standby)  // lets only do the pulsey animation if the lamp is on in the first place
           client.publish("LampNode/Comms", "Release");
       }
       button_released = false;
@@ -350,22 +348,6 @@ void callback(char* topic, byte* payload, unsigned int length)
       Serial.println("CYCLE");
     }
   }
-  
-  if (strcmp(topic,"LampNode01/Transition")==0)
-  {        
-    if(strcmp(input,"Fade")==0)
-    {
-      Transition = FADE;
-      Serial.println("FADE");
-    }
-    if(strcmp(input,"Instant")==0)
-    {
-      Transition = INSTANT;
-      Serial.println("INSTANT");
-    }
-    // save to eeprom
-     writeEEPROM(MEM_TRANSITION, Transition);
-  }
 
   if (strcmp(topic,"LampNode/Comms")==0)
   {               
@@ -393,12 +375,12 @@ void callback(char* topic, byte* payload, unsigned int length)
   {  
     if(strcmp(input,"On")==0)
     {
-      setTheMode(COLOUR);
+      setStandby(false);
       Serial.println("ON");
     }
     if(strcmp(input,"Off")==0)
     {
-      setTheMode(OFF);
+      setStandby(true);
       Serial.println("OFF");
     }
   }
@@ -411,7 +393,10 @@ void callback(char* topic, byte* payload, unsigned int length)
     Serial.print(brightness_temp);
     if (brightness_temp >= 0 || brightness_temp < 256)
       brightness = brightness_temp;
-    applyColour(target_colour[0],target_colour[1],target_colour[2]);
+    
+    writeEEPROM(MEM_BRIGHTNESS,brightness);
+    if(Mode==COLOUR)
+      applyColour(target_colour[0],target_colour[1],target_colour[2]);
   }
 }
 
@@ -780,10 +765,6 @@ void setTheMode(Modes temp)
       setColourTarget(target_colour[0],target_colour[1],target_colour[2]); 
     break;
     
-    case OFF:
-      setColour(0,0,0);
-    break;
-    
     case TWINKLE:
       setColour(0,0,0);
     break;   
@@ -803,5 +784,16 @@ void setTheMode(Modes temp)
   
   Mode = temp;
   writeEEPROM(MEM_MODE, Mode);
+}
+
+void setStandby(bool state)
+{
+  if (state)
+    applyColour(0,0,0);
+  else
+    setColourTarget(target_colour[0],target_colour[1],target_colour[2]); 
+    
+  standby = state;
+  writeEEPROM(MEM_STANDBY, standby);
 }
 
