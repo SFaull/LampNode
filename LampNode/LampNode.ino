@@ -40,6 +40,7 @@
 #define RAINBOW_UPDATE_TIMEOUT 30
 #define CYCLE_UPDATE_TIMEOUT   40
 #define TWINKLE_UPDATE_TIMEOUT 50
+#define TEMPERATURE_READ_TIMEOUT 2000
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -49,6 +50,7 @@ unsigned long runTime         = 0,
               twinkleTimer    = 0, 
               rainbowTimer    = 0,
               cycleTimer      = 0,
+              readTempTimer   = 0,
               readInputTimer  = 0;
 
 long buttonTime = 0;
@@ -68,6 +70,7 @@ int brightness = 155;
 
 bool active = false;
 bool lastActive = false;
+bool overheating = false;
 
 const uint16_t PixelCount = 60; // this example assumes 3 pixels, making it smaller will cause a failure
 const uint8_t PixelPin = 14;  // make sure to set this to the correct pin, ignored for Esp8266
@@ -111,6 +114,7 @@ void setup()
   
   /* Start timers */
   setTimer(&readInputTimer);
+  setTimer(&readTempTimer);
   setTimer(&ledTimer);
   setTimer(&twinkleTimer);
   setTimer(&rainbowTimer);
@@ -155,8 +159,8 @@ void loop()
   
   unsigned long now = millis();  // get elapsed time
 
-  //if (!standby)
-  //{
+  if (!standby)
+  {
     switch (Mode)
     {  
       case COLOUR:
@@ -204,12 +208,31 @@ void loop()
         // unknown state - do nothing
       break;
     }
-  //}
-  //else
-  //{
+  }
+  else
+  {
     // do nothing if off
     //applyColour(0,0,0);
-  //}
+  }
+
+    /* Periodically read the temp sensor */
+  if (timerExpired(readTempTimer, TEMPERATURE_READ_TIMEOUT))
+  {
+    setTimer(&readTempTimer);  // reset timer
+    float voltage = analogRead(A0) * 5.0;
+          voltage /= 1024.0; 
+    float temperature = (voltage - 0.5) * 100 ;  //converting from 10 mv per degree wit 500 mV offset to degrees ((voltage - 500mV) times 100)
+    Serial.print("Temp: ");
+    Serial.print(temperature);
+    Serial.println(" deg");
+    if (temperature > 80)
+    {
+      overheating = true;
+      brightness = 127; // limit brightness for safety
+    }
+    else
+      overheating = false;
+  }
 
   /* Periodically read the inputs */
   if (timerExpired(readInputTimer, INPUT_READ_TIMEOUT)) // check for button press periodically
@@ -712,7 +735,7 @@ void connectingAnimation(void)
   for (int i=0; i<5; i++)
     strip.SetPixelColor(count+i, colour);
   strip.SetPixelColor(count-1, off);
-  strip.SetBrightness(brightness);
+  //strip.SetBrightness(brightness);
   strip.Show();
   if(count>60)
     count = 0;
