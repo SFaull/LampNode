@@ -108,9 +108,9 @@ void setup()
   Serial.begin(115200);
   Serial.flush();
   /* swap serial port and then back again - seems to fix pixel update issue */
-  Serial.swap();
-  delay(200);
-  Serial.swap();
+  //Serial.swap();
+  //delay(200);
+  //Serial.swap();
   
   /* Start timers */
   setTimer(&readInputTimer);
@@ -119,6 +119,16 @@ void setup()
   setTimer(&twinkleTimer);
   setTimer(&rainbowTimer);
   setTimer(&cycleTimer);
+
+  /* Set LED state */
+  strip.Begin();
+  strip.Show();
+  
+  /* Setup WiFi and MQTT */ 
+  setup_wifi();
+  client.setServer(MQTTserver, MQTTport);
+  client.setCallback(callback);
+
 
   /* Initialise EEPROM */
   EEPROM.begin(512);
@@ -138,15 +148,6 @@ void setup()
   }
     
   brightness = readEEPROM(MEM_BRIGHTNESS);
-
-  /* Set LED state */
-  strip.Begin();
-  strip.Show();
-  
-  /* Setup WiFi and MQTT */ 
-  setup_wifi();
-  client.setServer(MQTTserver, MQTTport);
-  client.setCallback(callback);
 }
 
 int cnt = 0;
@@ -225,10 +226,10 @@ void loop()
     Serial.print("Temp: ");
     Serial.print(temperature);
     Serial.println(" deg");
-    if (temperature > 80)
+    if ((temperature > 80) && (brightness > 100))
     {
       overheating = true;
-      brightness = 127; // limit brightness for safety
+      brightness = 100; // limit brightness for safety
     }
     else
       overheating = false;
