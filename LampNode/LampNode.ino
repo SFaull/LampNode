@@ -121,7 +121,18 @@ void setup()
   getColourFromMemory();
   setColourTarget(target_colour[0],target_colour[1],target_colour[2]);
   setTheMode((Modes)readEEPROM(MEM_MODE));
-  setStandby(readEEPROM(MEM_STANDBY));
+  
+  if(readEEPROM(MEM_STANDBY)==0)
+  {
+    setStandby(false);
+    Serial.println("STANDBY FALSE");
+  }
+  else 
+  {
+    setStandby(true);
+    Serial.println("STANDBY TRUE");
+  }
+    
   brightness = readEEPROM(MEM_BRIGHTNESS);
 
   /* Set LED state */
@@ -144,8 +155,8 @@ void loop()
   
   unsigned long now = millis();  // get elapsed time
 
-  if (!standby)
-  {
+  //if (!standby)
+  //{
     switch (Mode)
     {  
       case COLOUR:
@@ -193,12 +204,12 @@ void loop()
         // unknown state - do nothing
       break;
     }
-  }
-  else
-  {
+  //}
+  //else
+  //{
     // do nothing if off
     //applyColour(0,0,0);
-  }
+  //}
 
   /* Periodically read the inputs */
   if (timerExpired(readInputTimer, INPUT_READ_TIMEOUT)) // check for button press periodically
@@ -366,6 +377,44 @@ void callback(char* topic, byte* payload, unsigned int length)
       setColourTarget(target_colour[0],target_colour[1],target_colour[2]);
       Serial.println("Release");
     }
+    if(strcmp(input,"Update")==0)
+    {
+      Serial.println("Broadcasting parameters");
+      
+      char brightness_str[4];
+      itoa((brightness*100)/255, brightness_str, 10);
+      client.publish("LampNode01/Brightness", brightness_str);
+
+      if (standby)
+        client.publish("LampNode01/Standby", "0");
+      else
+        client.publish("LampNode01/Standby", "1");
+
+      switch (Mode)
+      {
+        case COLOUR:
+          client.publish("LampNode01/Mode", "Colour");
+        break;
+        
+        case TWINKLE:
+          client.publish("LampNode01/Mode", "Twinkle");
+        break;   
+         
+        case RAINBOW:
+          client.publish("LampNode01/Mode", "Rainbow");
+        break; 
+        
+        case CYCLE:
+          client.publish("LampNode01/Mode", "Cycle");
+        break;
+        
+        default:
+          // should never get here
+        break;
+      }
+      
+      // client.publish("LampNode01/Colour", "");
+    }
   }
   if (strcmp(topic,"LampNode01/Announcements")==0)
   {  
@@ -413,11 +462,15 @@ void reconnect() {
       //client.publish("/LampNode/Announcements", "LampNode01 connected");  // potentially not necessary
       // ... and resubscribe
       client.subscribe("LampNode01/Colour"); // listen for an rgb or hex colour value
+      Serial.println("Subscribed to Colour");
       client.subscribe("LampNode/Comms");  // listen for touch events (community topic)
+      Serial.println("Subscribed to Comms");
       client.subscribe("LampNode01/Mode");   // listen for mode of operation
+      Serial.println("Subscribed to Mode");
       client.subscribe("LampNode01/Power");  // listen for on/off status
+      Serial.println("Subscribed to Power");
       client.subscribe("LampNode01/Brightness");  // listen for brightness value
-      client.subscribe("LampNode01/Announcements");  // listen for announcements from controllers
+      Serial.println("Subscribed to Brightness");
     } 
     else 
     {
@@ -584,8 +637,8 @@ void setColour(int r, int g, int b)
   current_colour[0] = r;
   current_colour[1] = g;
   current_colour[2] = b;
-
-  applyColour(current_colour[0],current_colour[1],current_colour[2]);
+  if(!standby)
+    applyColour(current_colour[0],current_colour[1],current_colour[2]);
 }
 
 void setColourTarget(int r, int g, int b)
@@ -596,12 +649,6 @@ void setColourTarget(int r, int g, int b)
   target_colour[1] = g;
   target_colour[2] = b;
 
-/*
-  if (Transition != FADE) // if not fading, set colour to target immediately
-  {
-    setColour(r,g,b);
-  }
-*/
   saveColourToMemory();
   setColourTransition();
 }
@@ -762,6 +809,7 @@ void setTheMode(Modes temp)
   switch(temp)
   {
     case COLOUR:
+    if(!standby)
       setColourTarget(target_colour[0],target_colour[1],target_colour[2]); 
     break;
     
@@ -789,9 +837,15 @@ void setTheMode(Modes temp)
 void setStandby(bool state)
 {
   if (state)
+  {
     applyColour(0,0,0);
+    writeEEPROM(MEM_STANDBY, 1);
+  }
   else
+  {
     setColourTarget(target_colour[0],target_colour[1],target_colour[2]); 
+    writeEEPROM(MEM_STANDBY, 0);
+  }
     
   standby = state;
   writeEEPROM(MEM_STANDBY, standby);
