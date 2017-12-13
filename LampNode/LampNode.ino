@@ -27,9 +27,6 @@
 #define MEM_STANDBY     4
 #define MEM_BRIGHTNESS  5
 
-#define WIDTH    10
-#define HEIGHT   6
-
 /* Physical connections */
 #define BUTTON        D1               //button on pin D1
 #define AIN           A0
@@ -85,16 +82,6 @@ bool standby = false;
 
 enum Modes Mode;
 
-uint8_t LEDindex[HEIGHT][WIDTH] =  
-{
-  { 0,  1,  2,  3,  4,  5,  6,  7,  8,  9},
-  {10, 11, 12, 13, 14, 15, 16, 17, 18, 19},
-  {20, 21, 22, 23, 24, 25, 26, 27, 28, 29},
-  {30, 31, 32, 33, 34, 35, 36, 37, 38, 39},
-  {40, 41, 42, 43, 44, 45, 46, 47, 48, 49},
-  {50, 51, 52, 53, 54, 55, 56, 57, 58, 59}
-};
-
 NeoPixelBrightnessBus<NeoRgbFeature, Neo800KbpsMethod> strip(PixelCount, PixelPin);
 
 void setup() 
@@ -129,6 +116,7 @@ void setup()
   client.setServer(MQTTserver, MQTTport);
   client.setCallback(callback);
 
+  initOTA();
 
   /* Initialise EEPROM */
   EEPROM.begin(512);
@@ -157,6 +145,7 @@ void loop()
   if (!client.connected()) 
     reconnect();
   client.loop();
+  ArduinoOTA.handle();
   
   unsigned long now = millis();  // get elapsed time
 
@@ -890,4 +879,25 @@ byte rgb2wheel(int R, int G, int B)
  return  (B & 0xE0) | ((G & 0xE0)>>3) | (R >> 6);
 }
 
+void initOTA(void)
+{
+  ArduinoOTA.onStart([]() {
+    Serial.println("OTA Update Started");
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nOTA Update Complete");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+  });
+  ArduinoOTA.begin();
+}
 
