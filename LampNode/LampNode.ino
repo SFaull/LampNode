@@ -181,7 +181,7 @@ void loop()
         if(timerExpired(twinkleTimer, TWINKLE_UPDATE_TIMEOUT))
         {
           setTimer(&twinkleTimer); // reset timer
-          twinkle(220);
+          twinkle();
         }
       break;
   
@@ -406,13 +406,8 @@ void callback(char* topic, byte* payload, unsigned int length)
       Serial.println("Broadcasting parameters");
       
       char brightness_str[4];
-      itoa((brightness*100)/255, brightness_str, 10);
+      itoa(((brightness*100)/256)+1, brightness_str, 10);
       client.publish("LampNode01/Brightness", brightness_str);
-
-      if (standby)
-        client.publish("LampNode01/Standby", "0");
-      else
-        client.publish("LampNode01/Standby", "1");
 
       switch (Mode)
       {
@@ -437,7 +432,22 @@ void callback(char* topic, byte* payload, unsigned int length)
         break;
       }
       
-      // client.publish("LampNode01/Colour", "");
+      char hexR[3], hexG[3], hexB[3], hex[8];
+      
+      sprintf(hexR, "%02X", target_colour[0]);
+      sprintf(hexG, "%02X", target_colour[1]);
+      sprintf(hexB, "%02X", target_colour[2]);
+      strcpy(hex, "#");
+      strcat(hex, hexR);
+      strcat(hex, hexG);
+      strcat(hex, hexB);
+      
+      client.publish("LampNode01/Colour", hex);
+
+      if (standby)
+        client.publish("LampNode01/Power", "Off");
+      else
+        client.publish("LampNode01/Power", "On");
     }
   }
   if (strcmp(topic,"LampNode01/Announcements")==0)
@@ -804,14 +814,14 @@ bool coinFlip(void)
     return false;
 }
 
-void twinkle(int val)
+void twinkle()
 {
   // here we need to cycle through each led, assigning consectuve colours pulled from the Wheel function. Each time this is called all colours should shift one
   int red, green, blue;  
   int offset = random(30) - 15;
   int pix = random(60);
   int state = coinFlip();
-  
+  int val = rgb2wheel(target_colour[0],target_colour[1],target_colour[2]);
   Wheel(val+offset, &red, &green, &blue); // get our colour
   RgbColor colour(green,red,blue);
   RgbColor off(0,0,0);
@@ -872,6 +882,12 @@ void setStandby(bool state)
   }
     
   standby = state;
-  writeEEPROM(MEM_STANDBY, standby);
 }
+
+// doesnt work very well
+byte rgb2wheel(int R, int G, int B)
+{
+ return  (B & 0xE0) | ((G & 0xE0)>>3) | (R >> 6);
+}
+
 
