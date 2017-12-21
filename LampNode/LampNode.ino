@@ -11,12 +11,16 @@
 #include <PubSubClient.h>
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
+#include <DNSServer.h>
+#include <ESP8266WebServer.h>
 #include <ArduinoOTA.h>
 #include <EEPROM.h>
+#include <WiFiManager.h>
 #include <config.h> // this stores the private variables such as wifi ssid and password etc.
 #include <NeoPixelBrightnessBus.h> // instead of NeoPixelBus.h
 #include <stdio.h>
 #include <string.h>
+
 
 
 /* EEPROM memory map */
@@ -26,6 +30,8 @@
 #define MEM_MODE        3
 #define MEM_STANDBY     4
 #define MEM_BRIGHTNESS  5
+
+#define MAX_BRIGHTNESS 190 // ~75%
 
 /* Physical connections */
 #define BUTTON        D1               //button on pin D1
@@ -112,7 +118,11 @@ void setup()
   strip.Show();
   
   /* Setup WiFi and MQTT */ 
-  setup_wifi();
+  //setup_wifi();
+  //Local intialization. Once its business is done, there is no need to keep it around
+  WiFiManager wifiManager;
+  wifiManager.autoConnect("LampNode");
+    
   client.setServer(MQTTserver, MQTTport);
   client.setCallback(callback);
 
@@ -206,6 +216,7 @@ void loop()
   }
 
     /* Periodically read the temp sensor */
+    /*
   if (timerExpired(readTempTimer, TEMPERATURE_READ_TIMEOUT))
   {
     setTimer(&readTempTimer);  // reset timer
@@ -223,6 +234,7 @@ void loop()
     else
       overheating = false;
   }
+  */
 
   /* Periodically read the inputs */
   if (timerExpired(readInputTimer, INPUT_READ_TIMEOUT)) // check for button press periodically
@@ -459,7 +471,7 @@ void callback(char* topic, byte* payload, unsigned int length)
   if (strcmp(topic,"LampNode01/Brightness")==0)
   {  
     int brightness_temp = atoi(input);
-    brightness_temp*=255; // multiply by range
+    brightness_temp*=MAX_BRIGHTNESS; // multiply by range
     brightness_temp/=100;  // divide by 100
     Serial.print("Brightness: ");
     Serial.print(brightness_temp);
@@ -900,4 +912,3 @@ void initOTA(void)
   });
   ArduinoOTA.begin();
 }
-
