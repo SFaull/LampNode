@@ -22,7 +22,6 @@
 #include <string.h>
 
 
-
 /* EEPROM memory map */
 #define MEM_RED         0
 #define MEM_GREEN       1
@@ -31,7 +30,7 @@
 #define MEM_STANDBY     4
 #define MEM_BRIGHTNESS  5
 
-#define MAX_BRIGHTNESS 190 // ~75%
+#define MAX_BRIGHTNESS 153 // ~60%
 
 /* Physical connections */
 #define BUTTON        D1               //button on pin D1
@@ -90,6 +89,14 @@ enum Modes Mode;
 
 NeoPixelBrightnessBus<NeoRgbFeature, Neo800KbpsMethod> strip(PixelCount, PixelPin);
 
+RgbColor genericColour(0,255,0);
+
+void configModeCallback (WiFiManager *myWiFiManager) {
+  Serial.println("Entered config mode");
+  Serial.println(WiFi.softAPIP());
+  connectingAnimation();
+}
+
 void setup() 
 {
   /* Setup I/O */
@@ -121,6 +128,7 @@ void setup()
   //setup_wifi();
   //Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wifiManager;
+  wifiManager.setAPCallback(configModeCallback);  //set callback that gets called when connecting to previous WiFi fails, and enters Access Point mode
   wifiManager.autoConnect("LampNode");
     
   client.setServer(MQTTserver, MQTTport);
@@ -407,7 +415,7 @@ void callback(char* topic, byte* payload, unsigned int length)
       Serial.println("Broadcasting parameters");
       
       char brightness_str[4];
-      itoa(((brightness*100)/256)+1, brightness_str, 10);
+      itoa(((brightness*100)/(MAX_BRIGHTNESS+1))+1, brightness_str, 10);
       client.publish("LampNode01/Brightness", brightness_str);
 
       switch (Mode)
@@ -895,11 +903,15 @@ void initOTA(void)
 {
   ArduinoOTA.onStart([]() {
     Serial.println("OTA Update Started");
+    setColour(0,0,0);
   });
   ArduinoOTA.onEnd([]() {
     Serial.println("\nOTA Update Complete");
+    setColour(0,0,0);
   });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    strip.SetPixelColor((PixelCount*(progress / (total / 100)))/100, genericColour);
+    strip.Show();
     Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
   });
   ArduinoOTA.onError([](ota_error_t error) {
