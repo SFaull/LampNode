@@ -502,16 +502,7 @@ void reconnect() {
       //client.publish("/LampNode/Announcements", "LampNode01 connected");  // potentially not necessary
       // ... and resubscribe
       client.subscribe(MQTTtopic);
-      //client.subscribe(MQTTcolour); // listen for an rgb or hex colour value
-      //Serial.println("Subscribed to Colour");
-      //client.subscribe(MQTTcomms);  // listen for touch events (community topic)
-      //Serial.println("Subscribed to Comms");
-      //client.subscribe(MQTTmode);   // listen for mode of operation
-      //Serial.println("Subscribed to Mode");
-      //client.subscribe(MQTTpower);  // listen for on/off status
-      //Serial.println("Subscribed to Power");
-      //client.subscribe(MQTTbrightness);  // listen for brightness value
-      //Serial.println("Subscribed to Brightness");
+      client.subscribe(MQTTcomms);  // listen for touch events (community topic)
     } 
     else 
     {
