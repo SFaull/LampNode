@@ -47,13 +47,14 @@
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-const char* deviceName      = "LampNode01";
-const char* MQTTtopic       = "LampNode01/#";
-const char* MQTTmode        = "LampNode01/Mode";
-const char* MQTTpower       = "LampNode01/Power";
-const char* MQTTcolour      = "LampNode01/Colour";
-const char* MQTTbrightness  = "LampNode01/Brightness";
-const char* MQTTcomms       = "LampNode/Comms";
+const char* deviceName          = "LampNode01";
+const char* MQTTtopic           = "LampNode01/#";
+const char* MQTTmode            = "LampNode01/Mode";
+const char* MQTTpower           = "LampNode01/Power";
+const char* MQTTcolour          = "LampNode01/Colour";
+const char* MQTTbrightness      = "LampNode01/Brightness";
+const char* MQTTannouncements   = "LampNode01/Announcements";
+const char* MQTTcomms           = "LampNode/Comms";
 
 unsigned long runTime         = 0,
               ledTimer        = 0,
@@ -130,7 +131,7 @@ void setup()
   //setup_wifi();
   //Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wifiManager;
-  wifiManager.autoConnect("LampNode");
+  wifiManager.autoConnect(deviceName);
 
   client.setServer(MQTTserver, MQTTport);
   client.setCallback(callback);
@@ -264,7 +265,7 @@ void loop()
     {
       Serial.println("Button held...");
       if (!standby)
-        client.publish("LampNode/Comms", "Press");
+        client.publish(MQTTcomms, "Press");
       button_short_press = false;
     }
     
@@ -282,7 +283,7 @@ void loop()
       {
         Serial.println("Button released (long press).");
         if (!standby)  // lets only do the pulsey animation if the lamp is on in the first place
-          client.publish("LampNode/Comms", "Release");
+          client.publish(MQTTcomms, "Release");
       }
       button_released = false;
       button_short_press = false;
@@ -394,7 +395,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     }
   }
 
-  if (strcmp(topic,"LampNode/Comms")==0)
+  if (strcmp(topic, MQTTcomms)==0)
   {               
     if(strcmp(input,"Press")==0)
     {
@@ -411,6 +412,9 @@ void callback(char* topic, byte* payload, unsigned int length)
       setColourTarget(target_colour[0],target_colour[1],target_colour[2]);
       Serial.println("Release");
     }
+  }
+  if (strcmp(topic, MQTTannouncements)==0)
+  {
     if(strcmp(input,"Update")==0)
     {
       Serial.println("Broadcasting parameters");
