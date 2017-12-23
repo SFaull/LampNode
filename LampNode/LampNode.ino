@@ -47,6 +47,14 @@
 WiFiClient espClient;
 PubSubClient client(espClient);
 
+const char* deviceName      = "LampNode01";
+const char* MQTTtopic       = "LampNode01/#";
+const char* MQTTmode        = "LampNode01/Mode";
+const char* MQTTpower       = "LampNode01/Power";
+const char* MQTTcolour      = "LampNode01/Colour";
+const char* MQTTbrightness  = "LampNode01/Brightness";
+const char* MQTTcomms       = "LampNode/Comms";
+
 unsigned long runTime         = 0,
               ledTimer        = 0,
               twinkleTimer    = 0, 
@@ -91,12 +99,6 @@ NeoPixelBrightnessBus<NeoRgbFeature, Neo800KbpsMethod> strip(PixelCount, PixelPi
 
 RgbColor genericColour(0,255,0);
 
-void configModeCallback (WiFiManager *myWiFiManager) {
-  Serial.println("Entered config mode");
-  Serial.println(WiFi.softAPIP());
-  connectingAnimation();
-}
-
 void setup() 
 {
   /* Setup I/O */
@@ -128,9 +130,8 @@ void setup()
   //setup_wifi();
   //Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wifiManager;
-  wifiManager.setAPCallback(configModeCallback);  //set callback that gets called when connecting to previous WiFi fails, and enters Access Point mode
   wifiManager.autoConnect("LampNode");
-    
+
   client.setServer(MQTTserver, MQTTport);
   client.setCallback(callback);
 
@@ -328,7 +329,7 @@ void callback(char* topic, byte* payload, unsigned int length)
   
   Serial.println(input);
   
-  if (strcmp(topic,"LampNode01/Colour")==0)
+  if (strcmp(topic, MQTTcolour)==0)
   {  
     /* ----- Split message by separator character and store rgb values ---- */
     char * command;
@@ -367,7 +368,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     setColourTarget(temp[0],temp[1],temp[2]);
   } 
   
-  if (strcmp(topic,"LampNode01/Mode")==0)
+  if (strcmp(topic, MQTTmode)==0)
   {    
     Serial.print("Mode set to: ");
    
@@ -416,24 +417,24 @@ void callback(char* topic, byte* payload, unsigned int length)
       
       char brightness_str[4];
       itoa(((brightness*100)/(MAX_BRIGHTNESS+1))+1, brightness_str, 10);
-      client.publish("LampNode01/Brightness", brightness_str);
+      client.publish(MQTTbrightness, brightness_str);
 
       switch (Mode)
       {
         case COLOUR:
-          client.publish("LampNode01/Mode", "Colour");
+          client.publish(MQTTmode, "Colour");
         break;
         
         case TWINKLE:
-          client.publish("LampNode01/Mode", "Twinkle");
+          client.publish(MQTTmode, "Twinkle");
         break;   
          
         case RAINBOW:
-          client.publish("LampNode01/Mode", "Rainbow");
+          client.publish(MQTTmode, "Rainbow");
         break; 
         
         case CYCLE:
-          client.publish("LampNode01/Mode", "Cycle");
+          client.publish(MQTTmode, "Cycle");
         break;
         
         default:
@@ -451,19 +452,15 @@ void callback(char* topic, byte* payload, unsigned int length)
       strcat(hex, hexG);
       strcat(hex, hexB);
       
-      client.publish("LampNode01/Colour", hex);
+      client.publish(MQTTcolour, hex);
 
       if (standby)
-        client.publish("LampNode01/Power", "Off");
+        client.publish(MQTTpower, "Off");
       else
-        client.publish("LampNode01/Power", "On");
+        client.publish(MQTTpower, "On");
     }
   }
-  if (strcmp(topic,"LampNode01/Announcements")==0)
-  {  
-    // We should broadcast our settings for the app to populate its parameters
-  }
-  if (strcmp(topic,"LampNode01/Power")==0)
+  if (strcmp(topic, MQTTpower)==0)
   {  
     if(strcmp(input,"On")==0)
     {
@@ -476,7 +473,7 @@ void callback(char* topic, byte* payload, unsigned int length)
       Serial.println("OFF");
     }
   }
-  if (strcmp(topic,"LampNode01/Brightness")==0)
+  if (strcmp(topic, MQTTbrightness)==0)
   {  
     int brightness_temp = atoi(input);
     brightness_temp*=MAX_BRIGHTNESS; // multiply by range
@@ -498,22 +495,23 @@ void reconnect() {
   {
     Serial.print("Attempting MQTT connection... ");
     // Attempt to connect
-    if (client.connect("LampNode01", MQTTuser, MQTTpassword)) 
+    if (client.connect(deviceName, MQTTuser, MQTTpassword)) 
     {
       Serial.println("Connected");
       // Once connected, publish an announcement...
       //client.publish("/LampNode/Announcements", "LampNode01 connected");  // potentially not necessary
       // ... and resubscribe
-      client.subscribe("LampNode01/Colour"); // listen for an rgb or hex colour value
-      Serial.println("Subscribed to Colour");
-      client.subscribe("LampNode/Comms");  // listen for touch events (community topic)
-      Serial.println("Subscribed to Comms");
-      client.subscribe("LampNode01/Mode");   // listen for mode of operation
-      Serial.println("Subscribed to Mode");
-      client.subscribe("LampNode01/Power");  // listen for on/off status
-      Serial.println("Subscribed to Power");
-      client.subscribe("LampNode01/Brightness");  // listen for brightness value
-      Serial.println("Subscribed to Brightness");
+      client.subscribe(MQTTtopic);
+      //client.subscribe(MQTTcolour); // listen for an rgb or hex colour value
+      //Serial.println("Subscribed to Colour");
+      //client.subscribe(MQTTcomms);  // listen for touch events (community topic)
+      //Serial.println("Subscribed to Comms");
+      //client.subscribe(MQTTmode);   // listen for mode of operation
+      //Serial.println("Subscribed to Mode");
+      //client.subscribe(MQTTpower);  // listen for on/off status
+      //Serial.println("Subscribed to Power");
+      //client.subscribe(MQTTbrightness);  // listen for brightness value
+      //Serial.println("Subscribed to Brightness");
     } 
     else 
     {
