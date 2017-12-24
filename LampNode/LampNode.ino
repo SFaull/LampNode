@@ -42,6 +42,7 @@
 #define RAINBOW_UPDATE_TIMEOUT 30
 #define CYCLE_UPDATE_TIMEOUT   40
 #define TWINKLE_UPDATE_TIMEOUT 50
+#define BRIGHTNESS_UPDATE_TIMEOUT 50
 #define TEMPERATURE_READ_TIMEOUT 2000
 
 WiFiClient espClient;
@@ -58,6 +59,7 @@ const char* MQTTcomms           = "LampNode/Comms";
 
 unsigned long runTime         = 0,
               ledTimer        = 0,
+              brightnessTimer = 0,
               twinkleTimer    = 0, 
               rainbowTimer    = 0,
               cycleTimer      = 0,
@@ -75,7 +77,6 @@ bool button_released = false; // true if a button release has been registered
 bool button_short_press = false;
 bool target_met = false;
 bool pulse_animation = false;
-bool pulse_direction = 1;
 int pulse_addr = 0;
 int brightness = 155;
 
@@ -119,6 +120,7 @@ void setup()
   setTimer(&readInputTimer);
   setTimer(&readTempTimer);
   setTimer(&ledTimer);
+  setTimer(&brightnessTimer);
   setTimer(&twinkleTimer);
   setTimer(&rainbowTimer);
   setTimer(&cycleTimer);
@@ -171,6 +173,13 @@ void loop()
 
   if (!standby)
   {
+    /* Periodically update the brightness */
+    if(timerExpired(brightnessTimer, BRIGHTNESS_UPDATE_TIMEOUT))
+    {
+      setTimer(&brightnessTimer); // reset timer
+      set_brightness();
+    }
+    
     switch (Mode)
     {  
       case COLOUR:
@@ -178,9 +187,6 @@ void loop()
         if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
         {
           setTimer(&ledTimer); // reset timer
-          if(pulse_animation)
-            pulseEffect();
-          else
           fadeToColourTarget();
         }
   
@@ -488,8 +494,8 @@ void callback(char* topic, byte* payload, unsigned int length)
       brightness = brightness_temp;
     
     writeEEPROM(MEM_BRIGHTNESS,brightness);
-    if(Mode==COLOUR)
-      applyColour(target_colour[0],target_colour[1],target_colour[2]);
+    //if(Mode==COLOUR)
+    //  applyColour(target_colour[0],target_colour[1],target_colour[2]);
   }
 }
 
@@ -890,6 +896,51 @@ void setStandby(bool state)
 byte rgb2wheel(int R, int G, int B)
 {
  return  (B & 0xE0) | ((G & 0xE0)>>3) | (R >> 6);
+}
+
+void set_brightness(void)
+{
+  static int last_brightness = 153;
+  static int brightness_pulse = 153;
+  static float coefficient = 1.0;
+  static bool pulse_direction = 1;
+  
+  if (pulse_animation)
+  {
+    pulse_brightness = brightness * coefficient;
+    strip.SetBrightness(pulse_brightness);
+    
+    if (coefficient>=1.0)
+      pulse_direction = 0;
+    if (coefficient<=0.5)
+      pulse_direction = 1;  
+    
+    if (pulse_direction)
+      coefficient+=0.05;
+    else
+      coefficient-=0.05;
+  }
+  else
+  {
+    if(coefficient < 1.0)
+    {
+      coefficient+=0.05;
+      pulse_brightness = brightness * coefficient;
+      strip.SetBrightness(pulse_brightness);
+    }
+    else
+    {
+      if (last_brightness!=brightness)
+      {
+        strip.SetBrightness(brightness);
+        if (mode == Colour)
+        {
+          strip.Show();
+        }
+        last_brightness = brightness;
+      }
+    }
+  }
 }
 
 void initOTA(void)
