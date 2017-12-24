@@ -569,7 +569,6 @@ void applyColour(uint8_t r, uint8_t g, uint8_t b)
     {
       strip.SetPixelColor(i, colour);
     }
-    strip.SetBrightness(brightness);
     strip.Show();
     Serial.print("Whole strip set to ");
     Serial.print(r);
@@ -730,7 +729,7 @@ void generatePulse(void)
     */
   }
 }
-
+/*
 void pulseEffect(void)
 {
   setColour(pulse[pulse_addr][0],pulse[pulse_addr][1],pulse[pulse_addr][2]);
@@ -745,7 +744,7 @@ void pulseEffect(void)
   else
     pulse_addr--;
 }
-
+*/
 void connectingAnimation(void)
 {
   static int count = -4;
@@ -804,7 +803,6 @@ void rainbow(void)
     RgbColor colour(green,red,blue);
     strip.SetPixelColor(i, colour);
   }
-  strip.SetBrightness(brightness);
   strip.Show();
   
   if (offset >= 255)
@@ -839,7 +837,6 @@ void twinkle()
   else
     strip.SetPixelColor(pix, off);
 
-  strip.SetBrightness(brightness);
   strip.Show();
 }
 
@@ -903,12 +900,16 @@ void set_brightness(void)
   static int last_brightness = 153;
   static int brightness_pulse = 153;
   static float coefficient = 1.0;
-  static bool pulse_direction = 1;
+  static bool pulse_direction = 0;
   
   if (pulse_animation)
   {
-    pulse_brightness = brightness * coefficient;
-    strip.SetBrightness(pulse_brightness);
+    brightness_pulse = brightness * coefficient;
+
+    Serial.print("pulse animation: ");
+    Serial.println(brightness_pulse);
+    
+    strip.SetBrightness(brightness_pulse);
     
     if (coefficient>=1.0)
       pulse_direction = 0;
@@ -916,24 +917,29 @@ void set_brightness(void)
       pulse_direction = 1;  
     
     if (pulse_direction)
-      coefficient+=0.05;
+      coefficient+=0.025;
     else
-      coefficient-=0.05;
+      coefficient-=0.025;
+
+    if (Mode == COLOUR)
+    {
+      strip.Show();
+    }
   }
   else
   {
     if(coefficient < 1.0)
     {
-      coefficient+=0.05;
-      pulse_brightness = brightness * coefficient;
-      strip.SetBrightness(pulse_brightness);
+      coefficient+=0.025;
+      brightness_pulse = brightness * coefficient;
+      strip.SetBrightness(brightness_pulse);
     }
     else
     {
       if (last_brightness!=brightness)
       {
         strip.SetBrightness(brightness);
-        if (mode == Colour)
+        if (Mode == COLOUR)
         {
           strip.Show();
         }
