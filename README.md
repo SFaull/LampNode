@@ -5,16 +5,19 @@ https://redd.it/7mob5w
 
 
 Overview
+
 WiFi enabled lamp that is controlled by MQTT. The code is written for LampNode01, if additional lamps are to be programmed all instances of LampNode01 should be changed to LampNode02 so that each lamp has a unique name (LampNode03 and so on.) If the touch pad on top is held, the lamp will begin to pulse and so will all other LampNodes. This feature was added because I have family that live far away so it provides a way of communicating with them over long distance via a subtle animation. 
 
 
 
 Wifi Connection
+
 On power up, the lamp will try to connect to the last used network automatically. If this is unsuccessful it will create its own access point named LampNode01. Connect to the access point and go to 192.168.4.1 from your browser. From here you can search for access points and enter a password. The lamp will connect to the selected access point and its local LampNode01 access poin will cease to exist.
 
 
 
 Modes of operation
+
 The LampNode currently has 4 modes of operation:
   - Colour: sets the entire LED array to a single solid colour
   - Cycle: uses a colour wheel to slowly cycle through all colours
@@ -26,6 +29,7 @@ The onboard EEPROM is used to store the current RGB colour, the brightness, the 
   
   
 Hardware
+
   - 1m strip of 60 WS2812 LEDs (I only used 57 because 3 LEDs were behaving badly so I removed them)
   - Wemos D1 mini
   - LM2596 DC-DC Buck Converter
@@ -39,6 +43,7 @@ Hardware
   
   
 Communication
+
 Download an MQTT app for your mobile (I use MQTT dash) and set up a CloudMQTT account to host the messages. You will have to add a config.h file to your arduino libraries folder containing the following:
   const char* MQTTserver = xxxx;
   const char* MQTTuser = xxxx;
