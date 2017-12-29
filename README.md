@@ -45,20 +45,34 @@ Hardware
 Communication
 
 Download an MQTT app for your mobile (I use MQTT dash) and set up a CloudMQTT account to host the messages. You will have to add a config.h file to your arduino libraries folder containing the following:
+
   const char* MQTTserver = xxxx;
+  
   const char* MQTTuser = xxxx;
+  
   const char* MQTTpassword = xxxx;
+  
   const int MQTTport = xxxx;
+  
 These parameters can be obtained by loging into CloudMQTT using a web browser.
 
 The app needs to be set up to send messages to the following topics:
-    Topic                     Expected messages
-    ----------------------------------------------------
-    LampNode01/Power          'On', 'Off'
-    LampNode01/Mode           'Colour', 'Cycle', 'Rainbow', 'Twinkle'
-    LampNode01/Colour         Either RGB or Hex, eg. for red send 'rgb(255,0,0)' or #FF0000
-    LampNode01/Brightness     Any value between 0 and 100
-  - LampNode01/Announcements  'Update' (this will request the lamp to send all of the above parameters hence updateing all tiles in the app)
+
+
+    Topic -> Expected messages
+    
+    -------------------------------------------------------------------------------------
+    
+    LampNode01/Power -> 'On', 'Off'
+    
+    LampNode01/Mode -> 'Colour', 'Cycle', 'Rainbow', 'Twinkle'
+    
+    LampNode01/Colour -> Either RGB or Hex, eg. for red send 'rgb(255,0,0)' or #FF0000
+    
+    LampNode01/Brightness -> Any value between 0 and 100
+    
+    
+LampNode01/Announcements  'Update' (this will request the lamp to send all of the above parameters hence updateing all tiles in the app)
   
 Obviously if you are setting up a second lamp all of the above will be LampNode02.
   
