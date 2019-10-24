@@ -20,51 +20,20 @@
 #include <NeoPixelBrightnessBus.h> // instead of NeoPixelBus.h
 #include <stdio.h>
 #include <string.h>
-
-
-/* EEPROM memory map */
-#define MEM_RED         0
-#define MEM_GREEN       1
-#define MEM_BLUE        2
-#define MEM_MODE        3
-#define MEM_STANDBY     4
-#define MEM_BRIGHTNESS  5
-
-#define MAX_BRIGHTNESS 153 // ~60%
-
-/* Physical connections */
-#define BUTTON        D1               //button on pin D1
-#define AIN           A0
-
-/* Timers */
-#define INPUT_READ_TIMEOUT     50   //check for button pressed every 50ms
-#define LED_UPDATE_TIMEOUT     20   // update led every 20ms
-#define RAINBOW_UPDATE_TIMEOUT 30
-#define CYCLE_UPDATE_TIMEOUT   40
-#define TWINKLE_UPDATE_TIMEOUT 50
-#define BRIGHTNESS_UPDATE_TIMEOUT 50
-#define TEMPERATURE_READ_TIMEOUT 2000
+#include "config.h"
+#include "credentials.h"
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-const char* deviceName          = "LampNode01";
-const char* MQTTtopic           = "LampNode01/#";
-const char* MQTTmode            = "LampNode01/Mode";
-const char* MQTTpower           = "LampNode01/Power";
-const char* MQTTcolour          = "LampNode01/Colour";
-const char* MQTTbrightness      = "LampNode01/Brightness";
-const char* MQTTannouncements   = "LampNode01/Announcements";
-const char* MQTTcomms           = "LampNode/Comms";
-
-unsigned long runTime         = 0,
-              ledTimer        = 0,
-              brightnessTimer = 0,
-              twinkleTimer    = 0, 
-              rainbowTimer    = 0,
-              cycleTimer      = 0,
-              readTempTimer   = 0,
-              readInputTimer  = 0;
+unsigned long runTime         = 0;
+unsigned long ledTimer        = 0;
+unsigned long brightnessTimer = 0;
+unsigned long twinkleTimer    = 0;
+unsigned long rainbowTimer    = 0;
+unsigned long cycleTimer      = 0;
+unsigned long readTempTimer   = 0;
+unsigned long readInputTimer  = 0;
 
 long buttonTime = 0;
 long lastPushed = 0; // stores the time when button was last depressed
@@ -85,7 +54,7 @@ bool lastActive = false;
 bool overheating = false;
 
 const uint16_t PixelCount = 60; // this example assumes 3 pixels, making it smaller will cause a failure
-const uint8_t PixelPin = 14;  // make sure to set this to the correct pin, ignored for Esp8266
+
 
 unsigned int target_colour[3] = {0,0,0}; // rgb value that LEDs are currently set to
 unsigned int current_colour[3] = {0,0,0};  // rgb value which we aim to set the LEDs to
@@ -97,50 +66,56 @@ bool standby = false;
 
 enum Modes Mode;
 
-NeoPixelBrightnessBus<NeoRgbFeature, Neo800KbpsMethod> strip(PixelCount, PixelPin);
+NeoPixelBrightnessBus<NeoRgbFeature, Neo800KbpsMethod> strip(PixelCount, WS2812_PIN);
 
 RgbColor genericColour(0,255,0);
 
-void setup() 
+void setTheMode(Modes temp);
+
+
+void io_init(void)
 {
-  /* Setup I/O */
+    /* Setup I/O */
   pinMode(LED_BUILTIN, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
   pinMode(BUTTON, INPUT_PULLUP);  // Enables the internal pull-up resistor
   digitalWrite(LED_BUILTIN, HIGH); 
-  
-  /* Setup serial */
+}
+
+void serial_init(void)
+{
+    /* Setup serial */
   Serial.begin(115200);
   Serial.flush();
   /* swap serial port and then back again - seems to fix pixel update issue */
   //Serial.swap();
   //delay(200);
   //Serial.swap();
-  
-  /* Start timers */
-  setTimer(&readInputTimer);
-  setTimer(&readTempTimer);
-  setTimer(&ledTimer);
-  setTimer(&brightnessTimer);
-  setTimer(&twinkleTimer);
-  setTimer(&rainbowTimer);
-  setTimer(&cycleTimer);
+}
 
-  /* Set LED state */
+void led_init(void)
+{
+    /* Set LED state */
   strip.Begin();
   strip.Show();
-  
-  /* Setup WiFi and MQTT */ 
+}
+
+void wifi_init(void)
+{
+    /* Setup WiFi and MQTT */ 
   //setup_wifi();
   //Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wifiManager;
-  wifiManager.autoConnect(deviceName);
+  wifiManager.autoConnect(DEVICE_NAME);
 
-  client.setServer(MQTTserver, MQTTport);
+  client.setServer(MQTT_SERVER, MQTT_PORT);
   client.setCallback(callback);
 
   initOTA();
+}
 
-  /* Initialise EEPROM */
+void eeprom_init(void)
+{
+    /* Initialise EEPROM */
   EEPROM.begin(512);
   getColourFromMemory();
   setColourTarget(target_colour[0],target_colour[1],target_colour[2]);
@@ -158,6 +133,16 @@ void setup()
   }
     
   brightness = readEEPROM(MEM_BRIGHTNESS);
+}
+
+void setup() 
+{
+  io_init();
+  serial_init();
+  timer_init();
+  led_init();
+  wifi_init();
+  eeprom_init();
 }
 
 int cnt = 0;
@@ -231,27 +216,6 @@ void loop()
     //applyColour(0,0,0);
   }
 
-    /* Periodically read the temp sensor */
-    /*
-  if (timerExpired(readTempTimer, TEMPERATURE_READ_TIMEOUT))
-  {
-    setTimer(&readTempTimer);  // reset timer
-    float voltage = analogRead(A0) * 5.0;
-          voltage /= 1024.0; 
-    float temperature = (voltage - 0.5) * 100 ;  //converting from 10 mv per degree wit 500 mV offset to degrees ((voltage - 500mV) times 100)
-    Serial.print("Temp: ");
-    Serial.print(temperature);
-    Serial.println(" deg");
-    if ((temperature > 80) && (brightness > 100))
-    {
-      overheating = true;
-      brightness = 100; // limit brightness for safety
-    }
-    else
-      overheating = false;
-  }
-  */
-
   /* Periodically read the inputs */
   if (timerExpired(readInputTimer, INPUT_READ_TIMEOUT)) // check for button press periodically
   {
@@ -271,7 +235,7 @@ void loop()
     {
       Serial.println("Button held...");
       if (!standby)
-        client.publish(MQTTcomms, "Press");
+        client.publish(MQTT_COMMS, "Press");
       button_short_press = false;
     }
     
@@ -289,37 +253,12 @@ void loop()
       {
         Serial.println("Button released (long press).");
         if (!standby)  // lets only do the pulsey animation if the lamp is on in the first place
-          client.publish(MQTTcomms, "Release");
+          client.publish(MQTT_COMMS, "Release");
       }
       button_released = false;
       button_short_press = false;
     }
   }
-}
-
-void setup_wifi() 
-{
-  delay(10);
-  
-  // We start by connecting to a WiFi network
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) 
-  {
-    connectingAnimation();
-    Serial.print(".");
-  }
-
-  randomSeed(micros());
-
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
 }
 
 void callback(char* topic, byte* payload, unsigned int length) 
@@ -336,7 +275,7 @@ void callback(char* topic, byte* payload, unsigned int length)
   
   Serial.println(input);
   
-  if (strcmp(topic, MQTTcolour)==0)
+  if (strcmp(topic, MQTT_COLOUR)==0)
   {  
     /* ----- Split message by separator character and store rgb values ---- */
     char * command;
@@ -375,7 +314,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     setColourTarget(temp[0],temp[1],temp[2]);
   } 
   
-  if (strcmp(topic, MQTTmode)==0)
+  if (strcmp(topic, MQTT_MODE)==0)
   {    
     Serial.print("Mode set to: ");
    
@@ -401,7 +340,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     }
   }
 
-  if (strcmp(topic, MQTTcomms)==0)
+  if (strcmp(topic, MQTT_COMMS)==0)
   {               
     if(strcmp(input,"Press")==0)
     {
@@ -419,7 +358,7 @@ void callback(char* topic, byte* payload, unsigned int length)
       Serial.println("Release");
     }
   }
-  if (strcmp(topic, MQTTannouncements)==0)
+  if (strcmp(topic, MQTT_ANNOUNCEMENTS)==0)
   {
     if(strcmp(input,"Update")==0)
     {
@@ -427,24 +366,24 @@ void callback(char* topic, byte* payload, unsigned int length)
       
       char brightness_str[4];
       itoa(((brightness*100)/(MAX_BRIGHTNESS+1))+1, brightness_str, 10);
-      client.publish(MQTTbrightness, brightness_str);
+      client.publish(MQTT_BRIGHTNESS, brightness_str);
 
       switch (Mode)
       {
         case COLOUR:
-          client.publish(MQTTmode, "Colour");
+          client.publish(MQTT_MODE, "Colour");
         break;
         
         case TWINKLE:
-          client.publish(MQTTmode, "Twinkle");
+          client.publish(MQTT_MODE, "Twinkle");
         break;   
          
         case RAINBOW:
-          client.publish(MQTTmode, "Rainbow");
+          client.publish(MQTT_MODE, "Rainbow");
         break; 
         
         case CYCLE:
-          client.publish(MQTTmode, "Cycle");
+          client.publish(MQTT_MODE, "Cycle");
         break;
         
         default:
@@ -462,15 +401,15 @@ void callback(char* topic, byte* payload, unsigned int length)
       strcat(hex, hexG);
       strcat(hex, hexB);
       
-      client.publish(MQTTcolour, hex);
+      client.publish(MQTT_COLOUR, hex);
 
       if (standby)
-        client.publish(MQTTpower, "Off");
+        client.publish(MQTT_POWER, "Off");
       else
-        client.publish(MQTTpower, "On");
+        client.publish(MQTT_POWER, "On");
     }
   }
-  if (strcmp(topic, MQTTpower)==0)
+  if (strcmp(topic, MQTT_POWER)==0)
   {  
     if(strcmp(input,"On")==0)
     {
@@ -483,7 +422,7 @@ void callback(char* topic, byte* payload, unsigned int length)
       Serial.println("OFF");
     }
   }
-  if (strcmp(topic, MQTTbrightness)==0)
+  if (strcmp(topic, MQTT_BRIGHTNESS)==0)
   {  
     int brightness_temp = atoi(input);
     brightness_temp*=MAX_BRIGHTNESS; // multiply by range
@@ -505,14 +444,14 @@ void reconnect() {
   {
     Serial.print("Attempting MQTT connection... ");
     // Attempt to connect
-    if (client.connect(deviceName, MQTTuser, MQTTpassword)) 
+    if (client.connect(DEVICE_NAME, MQTT_USER, MQTT_PASS)) 
     {
       Serial.println("Connected");
       // Once connected, publish an announcement...
       //client.publish("/LampNode/Announcements", "LampNode01 connected");  // potentially not necessary
       // ... and resubscribe
-      client.subscribe(MQTTtopic);
-      client.subscribe(MQTTcomms);  // listen for touch events (community topic)
+      client.subscribe(MQTT_TOPIC);
+      client.subscribe(MQTT_COMMS);  // listen for touch events (community topic)
     } 
     else 
     {
@@ -595,23 +534,7 @@ void music2Brightness(void)
   }
 }
 
-/* pass this function a pointer to an unsigned long to store the start time for the timer */
-void setTimer(unsigned long *startTime)
-{
-  runTime = millis();    // get time running in ms
-  *startTime = runTime;  // store the current time
-}
 
-/* call this function and pass it the variable which stores the timer start time and the desired expiry time 
-   returns true fi timer has expired */
-bool timerExpired(unsigned long startTime, unsigned long expiryTime)
-{
-  runTime = millis(); // get time running in ms
-  if ( (runTime - startTime) >= expiryTime )
-    return true;
-  else
-    return false;
-}
 
 void writeEEPROM(int address, int val)
 {
@@ -820,7 +743,7 @@ bool coinFlip(void)
     return false;
 }
 
-void twinkle()
+void twinkle(void)
 {
   // here we need to cycle through each led, assigning consectuve colours pulled from the Wheel function. Each time this is called all colours should shift one
   int red, green, blue;  
