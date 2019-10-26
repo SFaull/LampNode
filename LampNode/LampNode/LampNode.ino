@@ -22,6 +22,7 @@
 #include <string.h>
 #include "config.h"
 #include "credentials.h"
+#include "timer.h"
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -72,6 +73,17 @@ RgbColor genericColour(0,255,0);
 
 void setTheMode(Modes temp);
 
+void timer_init(void)
+{
+	/* Start timers */
+	Timer.set(&readInputTimer);
+	Timer.set(&readTempTimer);
+	Timer.set(&ledTimer);
+	Timer.set(&brightnessTimer);
+	Timer.set(&twinkleTimer);
+	Timer.set(&rainbowTimer);
+	Timer.set(&cycleTimer);
+}
 
 void io_init(void)
 {
@@ -145,6 +157,118 @@ void setup()
   eeprom_init();
 }
 
+void led_process()
+{
+	if (!standby)
+	{
+		/* Periodically update the brightness */
+		if (Timer.isExpired(brightnessTimer, BRIGHTNESS_UPDATE_TIMEOUT))
+		{
+			Timer.set(&brightnessTimer); // reset timer
+			set_brightness();
+		}
+
+		switch (Mode)
+		{
+		case COLOUR:
+			/* Periodically update the LEDs */
+			if (Timer.isExpired(ledTimer, LED_UPDATE_TIMEOUT))
+			{
+				Timer.set(&ledTimer); // reset timer
+				fadeToColourTarget();
+			}
+
+			break;
+
+		case TWINKLE:
+			if (Timer.isExpired(twinkleTimer, TWINKLE_UPDATE_TIMEOUT))
+			{
+				Timer.set(&twinkleTimer); // reset timer
+				twinkle();
+			}
+			break;
+
+		case RAINBOW:
+			if (Timer.isExpired(rainbowTimer, RAINBOW_UPDATE_TIMEOUT))
+			{
+				Timer.set(&rainbowTimer); // reset timer
+				rainbow();
+			}
+			break;
+
+		case CYCLE:
+			if (Timer.isExpired(cycleTimer, CYCLE_UPDATE_TIMEOUT))
+			{
+				Timer.set(&cycleTimer); // reset timer
+				int r, g, b;
+				Wheel(cnt++, &r, &g, &b);
+				setColour(r, g, b);
+				if (cnt >= 256)
+					cnt = 0;
+			}
+			break;
+
+		default:
+			// unknown state - do nothing
+			break;
+		}
+	}
+	else
+	{
+		// do nothing if off
+		//applyColour(0,0,0);
+	}
+}
+
+void button_process()
+{
+	unsigned long now = millis();  // get elapsed time
+
+	/* Periodically read the inputs */
+	if (Timer.isExpired(readInputTimer, INPUT_READ_TIMEOUT)) // check for button press periodically
+	{
+		Timer.set(&readInputTimer);  // reset timer
+
+		readInputs();
+
+		if (button_pressed)
+		{
+			//start conting
+			lastPushed = now; // start the timer 
+			Serial.println("Button pushed... ");
+			button_pressed = false;
+		}
+
+		if (((now - lastPushed) > 1000) && button_short_press) //check the hold time
+		{
+			Serial.println("Button held...");
+			if (!standby)
+				client.publish(MQTT_COMMS, "Press");
+			button_short_press = false;
+		}
+
+		if (button_released)
+		{
+			//get the time that button was held in
+			//buttonTime = now - lastPushed;
+
+			if (button_short_press)  // for a short press we turn the device on/off
+			{
+				Serial.println("Button released (short press).");
+				setStandby(!standby);  // change the standby state
+			}
+			else  // for a long press we do the animation thing
+			{
+				Serial.println("Button released (long press).");
+				if (!standby)  // lets only do the pulsey animation if the lamp is on in the first place
+					client.publish(MQTT_COMMS, "Release");
+			}
+			button_released = false;
+			button_short_press = false;
+		}
+	}
+}
+
 int cnt = 0;
 void loop() 
 {
@@ -154,112 +278,11 @@ void loop()
   client.loop();
   ArduinoOTA.handle();
   
-  unsigned long now = millis();  // get elapsed time
-
-  if (!standby)
-  {
-    /* Periodically update the brightness */
-    if(timerExpired(brightnessTimer, BRIGHTNESS_UPDATE_TIMEOUT))
-    {
-      setTimer(&brightnessTimer); // reset timer
-      set_brightness();
-    }
-    
-    switch (Mode)
-    {  
-      case COLOUR:
-        /* Periodically update the LEDs */
-        if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
-        {
-          setTimer(&ledTimer); // reset timer
-          fadeToColourTarget();
-        }
-  
-      break;
-  
-      case TWINKLE:
-        if(timerExpired(twinkleTimer, TWINKLE_UPDATE_TIMEOUT))
-        {
-          setTimer(&twinkleTimer); // reset timer
-          twinkle();
-        }
-      break;
-  
-      case RAINBOW:
-        if(timerExpired(rainbowTimer, RAINBOW_UPDATE_TIMEOUT))
-        {
-          setTimer(&rainbowTimer); // reset timer
-          rainbow();
-        }
-      break;
-  
-      case CYCLE:
-        if(timerExpired(cycleTimer, CYCLE_UPDATE_TIMEOUT))
-        {
-          setTimer(&cycleTimer); // reset timer
-          int r, g, b;
-          Wheel(cnt++, &r, &g, &b);
-          setColour(r,g,b);
-          if (cnt>=256)
-            cnt=0;
-        }
-      break;
-  
-      default:
-        // unknown state - do nothing
-      break;
-    }
-  }
-  else
-  {
-    // do nothing if off
-    //applyColour(0,0,0);
-  }
-
-  /* Periodically read the inputs */
-  if (timerExpired(readInputTimer, INPUT_READ_TIMEOUT)) // check for button press periodically
-  {
-    setTimer(&readInputTimer);  // reset timer
-    
-    readInputs();
-    
-    if (button_pressed)
-    {
-      //start conting
-      lastPushed = now; // start the timer 
-      Serial.println("Button pushed... ");
-      button_pressed = false;
-    }
-
-    if (((now - lastPushed) > 1000) && button_short_press) //check the hold time
-    {
-      Serial.println("Button held...");
-      if (!standby)
-        client.publish(MQTT_COMMS, "Press");
-      button_short_press = false;
-    }
-    
-    if (button_released)
-    {
-      //get the time that button was held in
-      //buttonTime = now - lastPushed;
-
-      if (button_short_press)  // for a short press we turn the device on/off
-      {
-        Serial.println("Button released (short press).");
-        setStandby(!standby);  // change the standby state
-      }
-      else  // for a long press we do the animation thing
-      {
-        Serial.println("Button released (long press).");
-        if (!standby)  // lets only do the pulsey animation if the lamp is on in the first place
-          client.publish(MQTT_COMMS, "Release");
-      }
-      button_released = false;
-      button_short_press = false;
-    }
-  }
+  led_process();
+  button_process();
 }
+
+
 
 void callback(char* topic, byte* payload, unsigned int length) 
 {
