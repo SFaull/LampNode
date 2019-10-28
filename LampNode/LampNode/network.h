@@ -17,6 +17,8 @@ class NetworkClass
  public:
 	void init();
 	void process();
+	void initOTA(void);
+	void reconnect();
 };
 
 extern NetworkClass Network;

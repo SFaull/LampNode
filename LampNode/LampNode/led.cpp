@@ -4,24 +4,20 @@
 
 #include "led.h"
 #include "timer.h"
-#include <NeoPixelBrightnessBus.h> // instead of NeoPixelBus.h
+#include "userconfig.h"
+#include <FastLED.h>
 
-NeoPixelBrightnessBus<NeoRgbFeature, Neo800KbpsMethod> strip(PixelCount, WS2812_PIN);
+#define LED_COUNT 60
 
-RgbColor genericColour(0, 255, 0);
 
-enum Modes { COLOUR, TWINKLE, RAINBOW, CYCLE };   // various modes of operation
-enum Modes Mode;
-void setTheMode(Modes temp);
+enum Modes Mode = CYCLE;
 
 unsigned long ledTimer = 0;
 unsigned long brightnessTimer = 0;
 unsigned long twinkleTimer = 0;
 unsigned long rainbowTimer = 0;
 unsigned long cycleTimer = 0;
-
-const uint16_t PixelCount = 60; // this example assumes 3 pixels, making it smaller will cause a failure
-
+int cnt = 0;
 
 unsigned int target_colour[3] = { 0,0,0 }; // rgb value that LEDs are currently set to
 unsigned int current_colour[3] = { 0,0,0 };  // rgb value which we aim to set the LEDs to
@@ -33,12 +29,16 @@ bool pulse_animation = false;
 int pulse_addr = 0;
 int brightness = 155;
 
+bool standby = false;
+
+// Define the array of leds
+CRGB leds[LED_COUNT];
+
 
 void LedClass::init()
 {
 	/* Set LED state */
-	strip.Begin();
-	strip.Show();
+	FastLED.addLeds<NEOPIXEL, WS2812_PIN>(leds, LED_COUNT);
 
 	/* init timers */
 	Timer.set(&ledTimer);
@@ -46,6 +46,10 @@ void LedClass::init()
 	Timer.set(&twinkleTimer);
 	Timer.set(&rainbowTimer);
 	Timer.set(&cycleTimer);
+
+	for (int i = 0; i < LED_COUNT; i++)
+		leds[i] = CRGB(0, 0, 0);
+	FastLED.show();
 }
 
 
@@ -112,7 +116,7 @@ void LedClass::process()
 	}
 }
 
-void fadeToColourTarget(void)
+void LedClass::fadeToColourTarget(void)
 {
 	static int addr = 0;
 
@@ -129,29 +133,31 @@ void fadeToColourTarget(void)
 	}
 }
 
-void applyColour(uint8_t r, uint8_t g, uint8_t b)
+void LedClass::applyColour(uint8_t r, uint8_t g, uint8_t b)
 {
 	if (r < 256 && g < 256 && b < 256)
 	{
-		RgbColor colour(g, r, b);
-		for (uint8_t i = 0; i < PixelCount; i++)
+		for (uint8_t i = 0; i < LED_COUNT; i++)
 		{
-			strip.SetPixelColor(i, colour);
+			leds[i] = CRGB(g, r, b);;
 		}
-		strip.Show();
+		FastLED.show();
+#if(0)
 		Serial.print("Whole strip set to ");
 		Serial.print(r);
 		Serial.print(",");
 		Serial.print(g);
 		Serial.print(",");
 		Serial.println(b);
+#endif
 	}
 	else
 		Serial.println("Invalid RGB value, colour not set");
 }
 
-void music2Brightness(void)
+void LedClass::music2Brightness(void)
 {
+#if(0)
 	static int ADCval, lastADCval, brightness = 0;
 	ADCval = analogRead(A0);
 	if (ADCval != lastADCval)
@@ -159,16 +165,17 @@ void music2Brightness(void)
 		Serial.print("ADC: ");
 		Serial.println(ADCval);
 		brightness = map(ADCval, 0, 1023, 0, 255);
-		strip.SetBrightness(brightness);
+		leds.SetBrightness(brightness);
 		lastADCval = ADCval;
 	}
+#endif
 }
 
 
 
 // Input a value 0 to 255 to get a color value.
 // The colours are a transition r - g - b - back to r.
-void Wheel(byte WheelPos, int* r, int* g, int* b)
+void LedClass::Wheel(byte WheelPos, int* r, int* g, int* b)
 {
 	WheelPos = 255 - WheelPos;
 	if (WheelPos < 85)
@@ -193,20 +200,19 @@ void Wheel(byte WheelPos, int* r, int* g, int* b)
 	}
 }
 
-void rainbow(void)
+void LedClass::rainbow(void)
 {
 	// here we need to cycle through each led, assigning consectuve colours pulled from the Wheel function. Each time this is called all colours should shift one
 	static int offset = 0;
-	static int stepVal = 256 / PixelCount;  // note the 256 value can be reduced to show less of the colour spectrum at once.
+	static int stepVal = 256 / LED_COUNT;  // note the 256 value can be reduced to show less of the colour spectrum at once.
 	int red, green, blue;
 
-	for (int i = 0; i < PixelCount; i++)
+	for (int i = 0; i < LED_COUNT; i++)
 	{
 		Wheel(i * stepVal + offset, &red, &green, &blue); // get our colour
-		RgbColor colour(green, red, blue);
-		strip.SetPixelColor(i, colour);
+		leds[i] = CRGB(green, red, blue);
 	}
-	strip.Show();
+	FastLED.show();
 
 	if (offset >= 255)
 		offset = 0;
@@ -214,7 +220,7 @@ void rainbow(void)
 		offset++;
 }
 
-bool coinFlip(void)
+bool LedClass::coinFlip(void)
 {
 	int coin = random(2) - 1;
 	if (coin)
@@ -223,7 +229,7 @@ bool coinFlip(void)
 		return false;
 }
 
-void twinkle(void)
+void LedClass::twinkle(void)
 {
 	// here we need to cycle through each led, assigning consectuve colours pulled from the Wheel function. Each time this is called all colours should shift one
 	int red, green, blue;
@@ -232,19 +238,17 @@ void twinkle(void)
 	int state = coinFlip();
 	int val = rgb2wheel(target_colour[0], target_colour[1], target_colour[2]);
 	Wheel(val + offset, &red, &green, &blue); // get our colour
-	RgbColor colour(green, red, blue);
-	RgbColor off(0, 0, 0);
 
 	if (state)
-		strip.SetPixelColor(pix, colour);
+		leds[pix] = CRGB(green, red, blue);
 	else
-		strip.SetPixelColor(pix, off);
+		leds[pix] = CRGB(0, 0, 0);
 
-	strip.Show();
+	FastLED.show();
 }
 
 
-void setTheMode(Modes temp)
+void LedClass::setTheMode(Modes temp)
 {
 	Serial.print("mode set to: ");
 	Serial.println(temp);
@@ -273,17 +277,17 @@ void setTheMode(Modes temp)
 	}
 
 	Mode = temp;
-	writeEEPROM(MEM_MODE, Mode);
+	//writeEEPROM(MEM_MODE, Mode);
 }
 
 
 // doesnt work very well
-byte rgb2wheel(int R, int G, int B)
+byte LedClass::rgb2wheel(int R, int G, int B)
 {
 	return  (B & 0xE0) | ((G & 0xE0) >> 3) | (R >> 6);
 }
 
-void set_brightness(void)
+void LedClass::set_brightness(void)
 {
 	static int last_brightness = 153;
 	static int brightness_pulse = 153;
@@ -297,7 +301,7 @@ void set_brightness(void)
 		Serial.print("pulse animation: ");
 		Serial.println(brightness_pulse);
 
-		strip.SetBrightness(brightness_pulse);
+		FastLED.setBrightness(brightness_pulse);
 
 		if (coefficient >= 1.0)
 			pulse_direction = 0;
@@ -311,7 +315,7 @@ void set_brightness(void)
 
 		if (Mode == COLOUR)
 		{
-			strip.Show();
+			FastLED.show();
 		}
 	}
 	else
@@ -320,16 +324,16 @@ void set_brightness(void)
 		{
 			coefficient += 0.025;
 			brightness_pulse = brightness * coefficient;
-			strip.SetBrightness(brightness_pulse);
+			FastLED.setBrightness(brightness_pulse);
 		}
 		else
 		{
 			if (last_brightness != brightness)
 			{
-				strip.SetBrightness(brightness);
+				FastLED.setBrightness(brightness);
 				if (Mode == COLOUR)
 				{
-					strip.Show();
+					FastLED.show();
 				}
 				last_brightness = brightness;
 			}
@@ -339,8 +343,9 @@ void set_brightness(void)
 
 
 /* gets the last saved RGB value from the eeprom and stores it in target_colour */
-void getColourFromMemory(void)
+void LedClass::getColourFromMemory(void)
 {
+	/*
 	for (int addr = MEM_RED; addr <= MEM_BLUE; addr++)
 	{
 		target_colour[addr] = readEEPROM(addr);
@@ -351,10 +356,13 @@ void getColourFromMemory(void)
 		Serial.print("] ");
 		Serial.println(target_colour[addr]);
 	}
+	*/
 }
 
 /* stores the last RGB value from target_colour in the eeprom */
-void saveColourToMemory(void)
+
+/*
+void LedClass::saveColourToMemory(void)
 {
 	Serial.println("Saving RGB value");
 	for (int addr = MEM_RED; addr <= MEM_BLUE; addr++)
@@ -368,8 +376,9 @@ void saveColourToMemory(void)
 		Serial.println(target_colour[addr]);
 	}
 }
+*/
 
-void setColour(int r, int g, int b)
+void LedClass::setColour(int r, int g, int b)
 {
 	current_colour[0] = r;
 	current_colour[1] = g;
@@ -378,7 +387,7 @@ void setColour(int r, int g, int b)
 		applyColour(current_colour[0], current_colour[1], current_colour[2]);
 }
 
-void setColourTarget(int r, int g, int b)
+void LedClass::setColourTarget(int r, int g, int b)
 {
 	target_met = false;
 
@@ -386,11 +395,11 @@ void setColourTarget(int r, int g, int b)
 	target_colour[1] = g;
 	target_colour[2] = b;
 
-	saveColourToMemory();
+	//saveColourToMemory();
 	setColourTransition();
 }
 
-void setColourTransition(void)
+void LedClass::setColourTransition(void)
 {
 	for (int addr = 0; addr < 50; addr++)  // for each element in the array
 	{
@@ -408,7 +417,7 @@ void setColourTransition(void)
 	}
 }
 
-void generatePulse(void)
+void LedClass::generatePulse(void)
 {
 	for (int addr = 0; addr < 30; addr++)  // for each element in the array
 	{
@@ -441,16 +450,15 @@ void pulseEffect(void)
 	pulse_addr--;
 }
 */
-void connectingAnimation(void)
+void LedClass::connectingAnimation(void)
 {
 	static int count = -4;
-	RgbColor colour(10, 10, 10);
-	RgbColor off(0, 0, 0);
+
 	for (int i = 0; i < 5; i++)
-		strip.SetPixelColor(count + i, colour);
-	strip.SetPixelColor(count - 1, off);
+		leds[count + i] = CRGB(10, 10, 10);
+	leds[count - 1] = CRGB(0, 0, 0);
 	//strip.SetBrightness(brightness);
-	strip.Show();
+	FastLED.show();
 	if (count > 60)
 		count = 0;
 	else

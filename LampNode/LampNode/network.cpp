@@ -15,11 +15,17 @@
 #include <string.h>
 
 #include "network.h"
+#include "userconfig.h"
+#include "config.h"
+#include "led.h"
+#include "credentials.h"
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
 char msg[50];        // message buffer
+
+static void callback(char* topic, byte* payload, unsigned int length);
 
 void NetworkClass::init()
 {
@@ -45,7 +51,7 @@ void NetworkClass::process()
 	ArduinoOTA.handle();
 }
 
-void initOTA(void)
+void NetworkClass::initOTA(void)
 {
 	ArduinoOTA.onStart([]() {
 		Serial.println("OTA Update Started");
@@ -121,7 +127,7 @@ void callback(char* topic, byte* payload, unsigned int length)
 			}
 		}
 		Serial.println(")");
-		setColourTarget(temp[0], temp[1], temp[2]);
+		Led.setColourTarget(temp[0], temp[1], temp[2]);
 	}
 
 	if (strcmp(topic, MQTT_MODE) == 0)
@@ -130,22 +136,22 @@ void callback(char* topic, byte* payload, unsigned int length)
 
 		if (strcmp(input, "Colour") == 0)
 		{
-			setTheMode(COLOUR);
+			Led.setTheMode(COLOUR);
 			Serial.println("COLOUR");
 		}
 		if (strcmp(input, "Twinkle") == 0)
 		{
-			setTheMode(TWINKLE);
+			Led.setTheMode(TWINKLE);
 			Serial.println("TWINKLE");
 		}
 		if (strcmp(input, "Rainbow") == 0)
 		{
-			setTheMode(RAINBOW);
+			Led.setTheMode(RAINBOW);
 			Serial.println("RAINBOW");
 		}
 		if (strcmp(input, "Cycle") == 0)
 		{
-			setTheMode(CYCLE);
+			Led.setTheMode(CYCLE);
 			Serial.println("CYCLE");
 		}
 	}
@@ -155,16 +161,20 @@ void callback(char* topic, byte* payload, unsigned int length)
 		if (strcmp(input, "Press") == 0)
 		{
 			// perform whatever fun animation you desire on touch
+			/*
 			pulse_animation = true;
 			pulse_addr = 0;
 			generatePulse();
+			*/
 			Serial.println("Press");
 		}
 		if (strcmp(input, "Release") == 0)
 		{
+			/*
 			// perform whatever fun animation you desire on touch
 			pulse_animation = false;
 			setColourTarget(target_colour[0], target_colour[1], target_colour[2]);
+			*/
 			Serial.println("Release");
 		}
 	}
@@ -173,6 +183,8 @@ void callback(char* topic, byte* payload, unsigned int length)
 		if (strcmp(input, "Update") == 0)
 		{
 			Serial.println("Broadcasting parameters");
+
+			/*
 
 			char brightness_str[4];
 			itoa(((brightness * 100) / (MAX_BRIGHTNESS + 1)) + 1, brightness_str, 10);
@@ -217,23 +229,26 @@ void callback(char* topic, byte* payload, unsigned int length)
 				client.publish(MQTT_POWER, "Off");
 			else
 				client.publish(MQTT_POWER, "On");
+
+				*/
 		}
 	}
 	if (strcmp(topic, MQTT_POWER) == 0)
 	{
 		if (strcmp(input, "On") == 0)
 		{
-			setStandby(false);
+			//setStandby(false);
 			Serial.println("ON");
 		}
 		if (strcmp(input, "Off") == 0)
 		{
-			setStandby(true);
+			//setStandby(true);
 			Serial.println("OFF");
 		}
 	}
 	if (strcmp(topic, MQTT_BRIGHTNESS) == 0)
 	{
+		/*
 		int brightness_temp = atoi(input);
 		brightness_temp *= MAX_BRIGHTNESS; // multiply by range
 		brightness_temp /= 100;  // divide by 100
@@ -245,10 +260,11 @@ void callback(char* topic, byte* payload, unsigned int length)
 		writeEEPROM(MEM_BRIGHTNESS, brightness);
 		//if(Mode==COLOUR)
 		//  applyColour(target_colour[0],target_colour[1],target_colour[2]);
+		*/
 	}
 }
 
-void reconnect() {
+void NetworkClass::reconnect() {
 	// Loop until we're reconnected
 	while (!client.connected())
 	{

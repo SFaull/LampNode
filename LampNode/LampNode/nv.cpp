@@ -3,12 +3,15 @@
 // 
 
 #include "nv.h"
+#include "led.h"
+#include <EEPROM.h>
 
 void NvClass::init()
 {
 
 	/* Initialise EEPROM */
 	EEPROM.begin(512);
+	/*
 	getColourFromMemory();
 	setColourTarget(target_colour[0], target_colour[1], target_colour[2]);
 	setTheMode((Modes)readEEPROM(MEM_MODE));
@@ -25,9 +28,10 @@ void NvClass::init()
 	}
 
 	brightness = readEEPROM(MEM_BRIGHTNESS);
+	*/
 }
 
-void writeEEPROM(int address, int val)
+void NvClass::writeEEPROM(int address, int val)
 {
 	if ((address < 512) && (address >= 0)) // make sure we are in range
 	{
@@ -41,7 +45,7 @@ void writeEEPROM(int address, int val)
 	}
 }
 
-int readEEPROM(int address)
+int NvClass::readEEPROM(int address)
 {
 	if ((address < 512) && (address >= 0)) // make sure we are in range
 	{

@@ -17,6 +17,7 @@ class ButtonClass
  public:
 	void init();
 	void process();
+	void readInputs(void);
 };
 
 extern ButtonClass Button;

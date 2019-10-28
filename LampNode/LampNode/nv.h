@@ -16,6 +16,8 @@ class NvClass
 
  public:
 	void init();
+	void writeEEPROM(int address, int val);
+	int readEEPROM(int address);
 };
 
 extern NvClass Nv;

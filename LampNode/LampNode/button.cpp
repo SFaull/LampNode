@@ -3,6 +3,9 @@
 // 
 
 #include "button.h"
+#include "timer.h"
+#include "userconfig.h"
+#include "config.h"
 
 unsigned long runTime = 0;
 unsigned long readInputTimer = 0;
@@ -43,8 +46,8 @@ void ButtonClass::process()
 		if (((now - lastPushed) > 1000) && button_short_press) //check the hold time
 		{
 			Serial.println("Button held...");
-			if (!standby)
-				client.publish(MQTT_COMMS, "Press");
+			//if (!standby)
+			//	client.publish(MQTT_COMMS, "Press");
 			button_short_press = false;
 		}
 
@@ -56,13 +59,13 @@ void ButtonClass::process()
 			if (button_short_press)  // for a short press we turn the device on/off
 			{
 				Serial.println("Button released (short press).");
-				setStandby(!standby);  // change the standby state
+				//setStandby(!standby);  // change the standby state
 			}
 			else  // for a long press we do the animation thing
 			{
 				Serial.println("Button released (long press).");
-				if (!standby)  // lets only do the pulsey animation if the lamp is on in the first place
-					client.publish(MQTT_COMMS, "Release");
+				//if (!standby)  // lets only do the pulsey animation if the lamp is on in the first place
+				//	client.publish(MQTT_COMMS, "Release");
 			}
 			button_released = false;
 			button_short_press = false;
@@ -70,7 +73,7 @@ void ButtonClass::process()
 	}
 }
 
-void readInputs(void)
+void ButtonClass::readInputs(void)
 {
 	static bool button_state, last_button_state = false; // Remembers the current and previous button states
 

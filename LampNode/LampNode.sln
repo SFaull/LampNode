@@ -5,7 +5,45 @@ VisualStudioVersion = 16.0.29215.179
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LampNode", "LampNode\LampNode.vcxproj", "{C5F80730-F44F-4478-BDAE-6634EFC2CA88}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FastLED", "..\..\..\libraries\FastLED\FastLED.vcxitems", "{28D95768-CDEC-470A-A233-6BAAF7505FF3}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ESP8266WiFi", "C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\ESP8266WiFi\ESP8266WiFi.vcxitems", "{5786073D-0F28-4F6B-B949-7ACA44FFC74C}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DNSServer", "C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\DNSServer\DNSServer.vcxitems", "{306938EF-64CD-4E6B-8799-9AEB3D75F0B2}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ArduinoOTA", "C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\ArduinoOTA\ArduinoOTA.vcxitems", "{8F97D05E-71CB-4F7E-AE4C-AF61A6F55DD8}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "WIFIMANAGER-ESP32-master", "..\..\..\libraries\WIFIMANAGER-ESP32-master\WIFIMANAGER-ESP32-master.vcxitems", "{55416537-B904-45AA-B54F-DF143DD73EB3}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ESP8266WebServer", "C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\ESP8266WebServer\ESP8266WebServer.vcxitems", "{5782E0F4-0215-4808-9B02-4B645C57C85D}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PubSubClient", "..\..\..\libraries\PubSubClient\PubSubClient.vcxitems", "{25AA962B-3CD8-4823-B614-D6F80A96CDA8}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ESP8266mDNS", "C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\ESP8266mDNS\ESP8266mDNS.vcxitems", "{35C33344-839A-4538-A1B8-7BF0E29C825C}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "EEPROM", "C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\EEPROM\EEPROM.vcxitems", "{4CD9B559-D2BB-445E-AE6A-6BF65E1DD6D2}"
+EndProject
 Global
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		..\..\..\libraries\PubSubClient\PubSubClient.vcxitems*{25aa962b-3cd8-4823-b614-d6f80a96cda8}*SharedItemsImports = 9
+		..\..\..\libraries\FastLED\FastLED.vcxitems*{28d95768-cdec-470a-a233-6baaf7505ff3}*SharedItemsImports = 9
+		C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\DNSServer\DNSServer.vcxitems*{306938ef-64cd-4e6b-8799-9aeb3d75f0b2}*SharedItemsImports = 9
+		C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\ESP8266mDNS\ESP8266mDNS.vcxitems*{35c33344-839a-4538-a1b8-7bf0e29c825c}*SharedItemsImports = 9
+		C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\EEPROM\EEPROM.vcxitems*{4cd9b559-d2bb-445e-ae6a-6bf65e1dd6d2}*SharedItemsImports = 9
+		..\..\..\libraries\WIFIMANAGER-ESP32-master\WIFIMANAGER-ESP32-master.vcxitems*{55416537-b904-45aa-b54f-df143dd73eb3}*SharedItemsImports = 9
+		C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\ESP8266WebServer\ESP8266WebServer.vcxitems*{5782e0f4-0215-4808-9b02-4b645c57c85d}*SharedItemsImports = 9
+		C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\ESP8266WiFi\ESP8266WiFi.vcxitems*{5786073d-0f28-4f6b-b949-7aca44ffc74c}*SharedItemsImports = 9
+		C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\ArduinoOTA\ArduinoOTA.vcxitems*{8f97d05e-71cb-4f7e-ae4c-af61a6f55dd8}*SharedItemsImports = 9
+		C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\ArduinoOTA\ArduinoOTA.vcxitems*{c5f80730-f44f-4478-bdae-6634efc2ca88}*SharedItemsImports = 4
+		C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\DNSServer\DNSServer.vcxitems*{c5f80730-f44f-4478-bdae-6634efc2ca88}*SharedItemsImports = 4
+		C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\EEPROM\EEPROM.vcxitems*{c5f80730-f44f-4478-bdae-6634efc2ca88}*SharedItemsImports = 4
+		C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\ESP8266mDNS\ESP8266mDNS.vcxitems*{c5f80730-f44f-4478-bdae-6634efc2ca88}*SharedItemsImports = 4
+		C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\ESP8266WebServer\ESP8266WebServer.vcxitems*{c5f80730-f44f-4478-bdae-6634efc2ca88}*SharedItemsImports = 4
+		C:\Users\Sam\AppData\Local\arduino15\packages\esp8266\hardware\esp8266\2.5.2\libraries\ESP8266WiFi\ESP8266WiFi.vcxitems*{c5f80730-f44f-4478-bdae-6634efc2ca88}*SharedItemsImports = 4
+		..\..\..\libraries\FastLED\FastLED.vcxitems*{c5f80730-f44f-4478-bdae-6634efc2ca88}*SharedItemsImports = 4
+		..\..\..\libraries\PubSubClient\PubSubClient.vcxitems*{c5f80730-f44f-4478-bdae-6634efc2ca88}*SharedItemsImports = 4
+		..\..\..\libraries\WIFIMANAGER-ESP32-master\WIFIMANAGER-ESP32-master.vcxitems*{c5f80730-f44f-4478-bdae-6634efc2ca88}*SharedItemsImports = 4
+	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
 		Release|x86 = Release|x86
