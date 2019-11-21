@@ -9,7 +9,13 @@
 	#include "WProgram.h"
 #endif
 
-enum Modes { COLOUR, TWINKLE, RAINBOW, CYCLE };   // various modes of operation
+typedef enum  { 
+	COLOUR = 0, 
+	TWINKLE, 
+	RAINBOW, 
+	CYCLE, 
+	UNKNOWN 
+} lamp_mode_t;   // various modes of operation
 
 class LedClass
 {
@@ -26,15 +32,16 @@ class LedClass
 	void Wheel(byte WheelPos, int* r, int* g, int* b);
 	void rainbow(void);
 	void twinkle(void);
-	void setTheMode(Modes temp);
+	void setTheMode(lamp_mode_t temp);
 	void set_brightness(void);
 	void getColourFromMemory(void);
-	void saveColourToMemory(void);
+	//void saveColourToMemory(void);
 	void setColour(int r, int g, int b);
 	void setColourTarget(int r, int g, int b);
-	void setColourTransition(void);
+	void startColourTransition(void);
 	void generatePulse(void);
 	void connectingAnimation(void);
+	void stripe(void);
 };
 
 extern LedClass Led;

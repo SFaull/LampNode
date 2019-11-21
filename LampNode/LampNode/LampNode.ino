@@ -39,42 +39,10 @@
 #include <CertStoreBearSSL.h>
 #include <BearSSLHelpers.h>
 #include "config.h"
-#include <power_mgt.h>
-#include <platforms.h>
-#include <pixeltypes.h>
-#include <pixelset.h>
-#include <noise.h>
-#include <lib8tion.h>
-#include <led_sysdefs.h>
-#include <hsv2rgb.h>
-#include <fastspi_types.h>
-#include <fastspi_ref.h>
-#include <fastspi_nop.h>
-#include <fastspi_dma.h>
-#include <fastspi_bitbang.h>
-#include <fastspi.h>
-#include <fastpin.h>
-#include <fastled_progmem.h>
-#include <fastled_delay.h>
-#include <fastled_config.h>
-#include <FastLED.h>
-#include <dmx.h>
-#include <cpp_compat.h>
-#include <controller.h>
-#include <colorutils.h>
-#include <colorpalettes.h>
-#include <color.h>
-#include <chipsets.h>
-#include <bitswap.h>
-#include "nv.h"
 #include "network.h"
 #include "button.h"
 #include "led.h"
-
 #include <EEPROM.h>
-
-#include <config.h> // this stores the private variables such as wifi ssid and password etc.
-
 #include "config.h"
 #include "credentials.h"
 #include "timer.h"
@@ -93,13 +61,17 @@ void setup()
 
 	/* Setup serial */
 	Serial.begin(115200);
-	Serial.flush();
+	//Serial.flush();
+	Serial.println("Starting up...");
 	/* swap serial port and then back again - seems to fix pixel update issue */
 	//Serial.swap();
 	//delay(200);
 	//Serial.swap();
 
-	//Nv.init();
+	int err = Config.init();
+	if (err < 0)
+		Serial.printf("Config returned error %d\n", err);
+
 	Button.init();
 	Led.init();	
 	Network.init();
@@ -109,7 +81,7 @@ void loop()
 {
 	Network.process();
 	Led.process();
-	Button.init();
+	Button.process();
 }
 
 /*

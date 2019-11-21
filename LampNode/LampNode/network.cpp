@@ -19,6 +19,7 @@
 #include "config.h"
 #include "led.h"
 #include "credentials.h"
+#include "button.h"
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -39,7 +40,6 @@ void NetworkClass::init()
 	client.setCallback(callback);
 
 	initOTA();
-
 }
 
 void NetworkClass::process()
@@ -55,15 +55,11 @@ void NetworkClass::initOTA(void)
 {
 	ArduinoOTA.onStart([]() {
 		Serial.println("OTA Update Started");
-		//setColour(0, 0, 0);
 	});
 	ArduinoOTA.onEnd([]() {
 		Serial.println("\nOTA Update Complete");
-		//setColour(0, 0, 0);
 	});
 	ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-		//strip.SetPixelColor((PixelCount * (progress / (total / 100))) / 100, genericColour);
-		//strip.Show();
 		Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
 	});
 	ArduinoOTA.onError([](ota_error_t error) {
@@ -127,7 +123,11 @@ void callback(char* topic, byte* payload, unsigned int length)
 			}
 		}
 		Serial.println(")");
-		Led.setColourTarget(temp[0], temp[1], temp[2]);
+
+		Config.getWriteableReference()->configuration.colour = { temp[0], temp[1], temp[2] };
+		Config.save();
+
+		//Led.setColourTarget(temp[0], temp[1], temp[2]);
 	}
 
 	if (strcmp(topic, MQTT_MODE) == 0)
@@ -136,24 +136,26 @@ void callback(char* topic, byte* payload, unsigned int length)
 
 		if (strcmp(input, "Colour") == 0)
 		{
-			Led.setTheMode(COLOUR);
+			Config.getWriteableReference()->configuration.mode = (uint8_t)COLOUR;
 			Serial.println("COLOUR");
 		}
 		if (strcmp(input, "Twinkle") == 0)
 		{
-			Led.setTheMode(TWINKLE);
+			Config.getWriteableReference()->configuration.mode = (uint8_t)TWINKLE;
 			Serial.println("TWINKLE");
 		}
 		if (strcmp(input, "Rainbow") == 0)
 		{
-			Led.setTheMode(RAINBOW);
+			Config.getWriteableReference()->configuration.mode = (uint8_t)RAINBOW;
 			Serial.println("RAINBOW");
 		}
 		if (strcmp(input, "Cycle") == 0)
 		{
-			Led.setTheMode(CYCLE);
+			Config.getWriteableReference()->configuration.mode = (uint8_t)CYCLE;
 			Serial.println("CYCLE");
 		}
+
+		Config.save();
 	}
 
 	if (strcmp(topic, MQTT_COMMS) == 0)
@@ -166,6 +168,7 @@ void callback(char* topic, byte* payload, unsigned int length)
 			pulse_addr = 0;
 			generatePulse();
 			*/
+			Button.remoteHold(true);
 			Serial.println("Press");
 		}
 		if (strcmp(input, "Release") == 0)
@@ -175,6 +178,8 @@ void callback(char* topic, byte* payload, unsigned int length)
 			pulse_animation = false;
 			setColourTarget(target_colour[0], target_colour[1], target_colour[2]);
 			*/
+			// TODO
+			Button.remoteHold(false);
 			Serial.println("Release");
 		}
 	}
@@ -184,40 +189,38 @@ void callback(char* topic, byte* payload, unsigned int length)
 		{
 			Serial.println("Broadcasting parameters");
 
-			/*
-
 			char brightness_str[4];
-			itoa(((brightness * 100) / (MAX_BRIGHTNESS + 1)) + 1, brightness_str, 10);
+			itoa(((Config.getWriteableReference()->configuration.brightness * 100) / (MAX_BRIGHTNESS + 1)) + 1, brightness_str, 10);
 			client.publish(MQTT_BRIGHTNESS, brightness_str);
 
-			switch (Mode)
+			switch (Config.getWriteableReference()->configuration.mode)
 			{
-			case COLOUR:
-				client.publish(MQTT_MODE, "Colour");
-				break;
+				case COLOUR:
+					client.publish(MQTT_MODE, "Colour");
+					break;
 
-			case TWINKLE:
-				client.publish(MQTT_MODE, "Twinkle");
-				break;
+				case TWINKLE:
+					client.publish(MQTT_MODE, "Twinkle");
+					break;
 
-			case RAINBOW:
-				client.publish(MQTT_MODE, "Rainbow");
-				break;
+				case RAINBOW:
+					client.publish(MQTT_MODE, "Rainbow");
+					break;
 
-			case CYCLE:
-				client.publish(MQTT_MODE, "Cycle");
-				break;
+				case CYCLE:
+					client.publish(MQTT_MODE, "Cycle");
+					break;
 
-			default:
-				// should never get here
-				break;
+				default:
+					// should never get here
+					break;
 			}
 
 			char hexR[3], hexG[3], hexB[3], hex[8];
 
-			sprintf(hexR, "%02X", target_colour[0]);
-			sprintf(hexG, "%02X", target_colour[1]);
-			sprintf(hexB, "%02X", target_colour[2]);
+			sprintf(hexR, "%02X", Config.getWriteableReference()->configuration.colour.red);
+			sprintf(hexG, "%02X", Config.getWriteableReference()->configuration.colour.green);
+			sprintf(hexB, "%02X", Config.getWriteableReference()->configuration.colour.blue);
 			strcpy(hex, "#");
 			strcat(hex, hexR);
 			strcat(hex, hexG);
@@ -225,12 +228,10 @@ void callback(char* topic, byte* payload, unsigned int length)
 
 			client.publish(MQTT_COLOUR, hex);
 
-			if (standby)
+			if (Config.getWriteableReference()->configuration.standby)
 				client.publish(MQTT_POWER, "Off");
 			else
 				client.publish(MQTT_POWER, "On");
-
-				*/
 		}
 	}
 	if (strcmp(topic, MQTT_POWER) == 0)
@@ -238,29 +239,31 @@ void callback(char* topic, byte* payload, unsigned int length)
 		if (strcmp(input, "On") == 0)
 		{
 			//setStandby(false);
+			Config.getWriteableReference()->configuration.standby = 0;
 			Serial.println("ON");
 		}
 		if (strcmp(input, "Off") == 0)
 		{
 			//setStandby(true);
+			Config.getWriteableReference()->configuration.standby = 1;
 			Serial.println("OFF");
 		}
+
+		Config.save();
 	}
 	if (strcmp(topic, MQTT_BRIGHTNESS) == 0)
 	{
-		/*
 		int brightness_temp = atoi(input);
 		brightness_temp *= MAX_BRIGHTNESS; // multiply by range
 		brightness_temp /= 100;  // divide by 100
 		Serial.print("Brightness: ");
 		Serial.print(brightness_temp);
 		if (brightness_temp >= 0 || brightness_temp < 256)
-			brightness = brightness_temp;
+			Config.getWriteableReference()->configuration.brightness = brightness_temp;
 
-		writeEEPROM(MEM_BRIGHTNESS, brightness);
+		Config.save();
 		//if(Mode==COLOUR)
 		//  applyColour(target_colour[0],target_colour[1],target_colour[2]);
-		*/
 	}
 }
 

@@ -6,11 +6,12 @@
 #include "timer.h"
 #include "userconfig.h"
 #include <FastLED.h>
+#include "config.h"
 
 #define LED_COUNT 60
 
 
-enum Modes Mode = CYCLE;
+lamp_mode_t Mode = UNKNOWN;
 
 unsigned long ledTimer = 0;
 unsigned long brightnessTimer = 0;
@@ -28,11 +29,22 @@ bool target_met = false;
 bool pulse_animation = false;
 int pulse_addr = 0;
 int brightness = 155;
-
 bool standby = false;
 
 // Define the array of leds
 CRGB leds[LED_COUNT];
+
+uint8_t plane_map[8][8] = 
+{
+	{0, 1, 2, 3, 4, 5, 6, 7},
+	{8, 9, 10, 11, 12, 13, 14, 15},
+	{16, 17, 18, 19, 20, 21, 22, 23},
+	{24, 25, 26, 27, 28, 29, 30, 31},
+	{32, 33, 34, 35, 36, 37, 38, 39},
+	{40, 41, 42, 43, 44, 45, 46, 47},
+	{48, 49, 50, 51, 52, 53, 54, 55},
+	{56, 57, 58, 59, 60, 61, 62, 63}
+};
 
 
 void LedClass::init()
@@ -55,6 +67,38 @@ void LedClass::init()
 
 void LedClass::process()
 {
+	/* fetch config */
+	config_data_t conf = Config.getReference()->configuration;
+
+	brightness = conf.brightness;
+
+	/* if the colour has changed, run the process*/
+	if ((target_colour[0] != conf.colour.red) || (target_colour[1] != conf.colour.green) || (target_colour[2] != conf.colour.blue))
+	{
+		target_colour[0] = conf.colour.red;
+		target_colour[1] = conf.colour.green;
+		target_colour[2] = conf.colour.blue;
+		startColourTransition();
+	}
+
+	if (Mode != conf.mode)
+	{
+		/* do something clever on a change of state like fade to black */
+		Mode = (lamp_mode_t)conf.mode;
+		if (Mode == COLOUR)
+			startColourTransition();
+	}
+
+	if (!standby && conf.standby)
+	{
+		if (Mode == COLOUR)
+			startColourTransition();
+	}
+
+	standby = conf.standby;
+
+	//Config.save();
+
 	if (!standby)
 	{
 		/* Periodically update the brightness */
@@ -66,55 +110,60 @@ void LedClass::process()
 
 		switch (Mode)
 		{
-		case COLOUR:
-			/* Periodically update the LEDs */
-			if (Timer.isExpired(ledTimer, LED_UPDATE_TIMEOUT))
-			{
-				Timer.set(&ledTimer); // reset timer
-				fadeToColourTarget();
-			}
+			case COLOUR:
+				/* Periodically update the LEDs */
+				if (Timer.isExpired(ledTimer, LED_UPDATE_TIMEOUT))
+				{
+					Timer.set(&ledTimer); // reset timer
+					fadeToColourTarget();
+				}
 
-			break;
+				break;
 
-		case TWINKLE:
-			if (Timer.isExpired(twinkleTimer, TWINKLE_UPDATE_TIMEOUT))
-			{
-				Timer.set(&twinkleTimer); // reset timer
-				twinkle();
-			}
-			break;
+			case TWINKLE:
+				if (Timer.isExpired(twinkleTimer, TWINKLE_UPDATE_TIMEOUT))
+				{
+					Timer.set(&twinkleTimer); // reset timer
+					twinkle();
+				}
+				break;
 
-		case RAINBOW:
-			if (Timer.isExpired(rainbowTimer, RAINBOW_UPDATE_TIMEOUT))
-			{
-				Timer.set(&rainbowTimer); // reset timer
-				rainbow();
-			}
-			break;
+			case RAINBOW:
+				if (Timer.isExpired(rainbowTimer, RAINBOW_UPDATE_TIMEOUT))
+				{
+					Timer.set(&rainbowTimer); // reset timer
+					rainbow();
+				}
+				break;
 
-		case CYCLE:
-			if (Timer.isExpired(cycleTimer, CYCLE_UPDATE_TIMEOUT))
-			{
-				Timer.set(&cycleTimer); // reset timer
-				int r, g, b;
-				Wheel(cnt++, &r, &g, &b);
-				setColour(r, g, b);
-				if (cnt >= 256)
-					cnt = 0;
-			}
-			break;
+			case CYCLE:
+				if (Timer.isExpired(cycleTimer, CYCLE_UPDATE_TIMEOUT))
+				{
+					Timer.set(&cycleTimer); // reset timer
+					int r, g, b;
+					Wheel(cnt++, &r, &g, &b);
+					setColour(r, g, b);
+					if (cnt >= 256)
+						cnt = 0;
+				}
+				break;
 
-		default:
-			// unknown state - do nothing
-			break;
+			default:
+				if (Timer.isExpired(twinkleTimer, TWINKLE_UPDATE_TIMEOUT))
+				{
+					Timer.set(&twinkleTimer); // reset timer
+					stripe();
+				}
+				break;
 		}
 	}
 	else
 	{
 		// do nothing if off
-		//applyColour(0,0,0);
+		applyColour(0,0,0);
 	}
 }
+
 
 void LedClass::fadeToColourTarget(void)
 {
@@ -139,7 +188,7 @@ void LedClass::applyColour(uint8_t r, uint8_t g, uint8_t b)
 	{
 		for (uint8_t i = 0; i < LED_COUNT; i++)
 		{
-			leds[i] = CRGB(g, r, b);;
+			leds[i] = CRGB(r, g, b);;
 		}
 		FastLED.show();
 #if(0)
@@ -210,7 +259,7 @@ void LedClass::rainbow(void)
 	for (int i = 0; i < LED_COUNT; i++)
 	{
 		Wheel(i * stepVal + offset, &red, &green, &blue); // get our colour
-		leds[i] = CRGB(green, red, blue);
+		leds[i] = CRGB(red, green, blue);
 	}
 	FastLED.show();
 
@@ -240,7 +289,7 @@ void LedClass::twinkle(void)
 	Wheel(val + offset, &red, &green, &blue); // get our colour
 
 	if (state)
-		leds[pix] = CRGB(green, red, blue);
+		leds[pix] = CRGB(red, green, blue);
 	else
 		leds[pix] = CRGB(0, 0, 0);
 
@@ -248,7 +297,30 @@ void LedClass::twinkle(void)
 }
 
 
-void LedClass::setTheMode(Modes temp)
+void LedClass::stripe(void)
+{
+	static uint8_t col = 0;
+
+	// turn all off
+	for (int i = 0; i < LED_COUNT; i++)
+		leds[i] = CRGB(0, 0, 0);
+
+
+	// here we need to cycle through each led, assigning consectuve colours pulled from the Wheel function. Each time this is called all colours should shift one
+	for (int i = 0; i < 7; i++)
+	{
+		uint8_t index = plane_map[i][col];
+			leds[index] = CRGB(50, 50, 50);
+	}
+
+	col++;
+
+	if (col >= 7) col = 0;
+
+	FastLED.show();
+}
+
+void LedClass::setTheMode(lamp_mode_t temp)
 {
 	Serial.print("mode set to: ");
 	Serial.println(temp);
@@ -396,11 +468,13 @@ void LedClass::setColourTarget(int r, int g, int b)
 	target_colour[2] = b;
 
 	//saveColourToMemory();
-	setColourTransition();
+	startColourTransition();
 }
 
-void LedClass::setColourTransition(void)
+void LedClass::startColourTransition(void)
 {
+	target_met = false;
+
 	for (int addr = 0; addr < 50; addr++)  // for each element in the array
 	{
 		for (int i = 0; i < 3; i++)  // for each colour in turn

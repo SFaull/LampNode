@@ -9,7 +9,7 @@
 #define MAX_BRIGHTNESS 153 // ~60%
 
 /* Physical connections */
-#define BUTTON        D1               //button on pin D1
+#define BUTTON        5               //button on pin D1
 #define AIN           A0
 #define WS2812_PIN    4  // make sure to set this to the correct pin, ignored for Esp8266
 
